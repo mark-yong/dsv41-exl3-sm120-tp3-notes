@@ -128,6 +128,51 @@ shorter prefill matrix first, or free more VRAM with smaller graphs.
    `ctr images export` can produce empty or broken archives. Plan image
    archival with that in mind.
 
+## So what
+
+Who this is useful to: anyone bringing DeepSeek-V4.1-Flash onto a 3×96 GB
+Blackwell-class box (RTX PRO 6000, PCIe NODE, no NVLink) and deciding
+between the EXL3 path and the dense+UVA expert-offload path.
+
+- If the goal is long context or maximum throughput, the dense+UVA path
+  measured better (7,424 prefill at 32k, 76.3-85.5 decode, per
+  peterkilfeather's gist). Those are external numbers, not an A/B against
+  the tables above, but nothing here contradicts them.
+- If you want EXL3 specifically, the working config and both failure modes
+  are documented, so the bring-up cost is the build, not the debugging.
+  The measured ceiling here is ~6.1k prefill at 8k and ~55 tok/s per-user
+  decode with DSpark on, at 32k max context.
+- What EXL3 buys on this box is not demonstrated by this run: the Engram
+  tables still spill to pinned host DDR and the KV pool stays small. A
+  lower-bpw (~3.25) build to free VRAM was not attempted.
+
+Honest summary: EXL3 TP3 works on SM120 after the Tempo port, and this
+records where it lands — a working but not winning configuration. The
+reusable parts are the single-knob ladder, the failure anatomy, and the
+repro pipeline (manifest-checked checkpoint pin, compose, bench tooling).
+
+## Next steps
+
+Untried, in rough priority order:
+
+1. Same-box A/B against dense+UVA: run the peterkilfeather overlay on this
+   machine during an exclusive window, same bench commit. That turns the
+   external reference into a measured comparison and is the main missing
+   number.
+2. DSpark-off decode rung at P4 — isolates the net wall-clock speedup of
+   speculation (accept length was 2.3-2.4 tokens/step; the A/B was not run).
+3. EXL3 long-context recoveries, one knob at a time: speculative decoding
+   off, smaller CUDA graphs, a shorter prefill bench matrix. The 131k bench
+   fell short by tens of MiB (474 MiB requested against 417-457 MiB free),
+   so any one of these may clear it.
+4. A ~3.25 bpw auto-build to free VRAM for a larger KV pool — explicitly
+   out of scope so far (see the policy note under Stack); it is the obvious
+   lever if EXL3 long context is the goal.
+5. A real fidelity check: current validation is smoke tests and the bench
+   tables only; nothing measures output quality against dense.
+6. Reproduction reports from other topologies — the P2P override step
+   assumes a NODE/PCIe layout; an NVLink or GB10 box may differ.
+
 ## Not claimed
 
 - Fidelity checks were smoke tests and the bench tables above; nothing else
@@ -226,8 +271,8 @@ NVIDIA runtime.
    artifact.
 
 Community image status (filled per the Local Inference Lab Community
-Docker Publishing Checklist; this image is documented here only and is
-not announced or supported in the community):
+Docker Publishing Checklist; announced via a writeup link in the LIL
+Discord, support still none committed):
 
 - Status: experimental community derivative; not maintained
 - Image and digest: `ghcr.io/mark-yong/dsv41-tempo-sm120-tp3@sha256:ddd31bc723e22f9081228727f148a1faa4f7c6773af0a2bbf4d040584a0b2622`
