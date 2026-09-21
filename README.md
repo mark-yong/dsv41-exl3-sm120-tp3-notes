@@ -202,6 +202,43 @@ NVIDIA runtime.
    The source build above remains the reference; the pull is a courtesy
    artifact.
 
+### Community image status
+
+Filled per the Local Inference Lab Community Docker Publishing Checklist;
+this image is documented here only and is not announced or supported in
+the community:
+
+- Status: experimental community derivative; not maintained
+- Image and digest: `ghcr.io/mark-yong/dsv41-tempo-sm120-tp3@sha256:075c9cd7d4194e931a10a2be7dbdd7ad499f736e07869ea66b39b85963aea448`
+- Based on: [jakejharris/jspark3-deepseek](https://github.com/jakejharris/jspark3-deepseek) @ `bb386d39098e…` on `vllm/vllm-openai@sha256:00d577a6a632…`
+- Build recipe: this repo, `reproduce/` (`prepare-tempo-tree.sh`, then `build.sh`)
+- Source commits and patches: `reproduce/tempo-overlay/sources-amd64.json`
+  pins all seven source archives (vLLM `e47aa780…`, cuda-exl3 `6a1ffc34…`,
+  FlashInfer `07869c61…`, CUTLASS ×2, CCCL, spdlog) and the 15-overlay
+  Tempo patch set; the amd64 delta is exactly the four files in
+  `reproduce/tempo-overlay/`
+- Changes from base: amd64/SM120 port (`ARCH_LIST` 12.1a→12.0a), parallel
+  build (MAX_JOBS 16), x86_64 cmake wheel; no engine-behavior changes
+  beyond Tempo's own patch set
+- B12X: N/A — the EXL3 path does not use the B12X kernel backend
+- Tested configuration: 3× RTX PRO 6000 96 GB (SM120) on PCIe 4.0 x16,
+  NODE topology; NVIDIA driver 615.71.09, CUDA 13.4 user mode; TP3;
+  Pollard 3.51 bpw EXL3 @ `f129e31a…`; fp8 KV (4 GiB); PIECEWISE CUDA
+  graphs; DSpark speculative (`num_speculative_tokens=5`); 32,768
+  max-model-len; compose defaults in `reproduce/compose/`
+- Validation results: `llm-inference-bench` decode matrix (conc 1/2/4 ×
+  context 0/16k, 30 s sustained, 2048 max output tokens) and the prefill
+  ladder at 8k/16k, during an exclusive GPU window; commands in
+  Reproducing step 5
+- Known limitations: no long-context prefill (131k boots but OOMs under
+  bench); prefill and decode trail the dense+UVA reference (external
+  numbers, not an A/B); DSpark net speedup not isolated; 8 GiB KV not
+  usable (see "What failed"); fidelity checks were smoke tests and the
+  bench tables only
+- Support: none committed. Issues on this repository are accepted but may
+  go unanswered; the author runs this path as a documented dead end (see
+  Takeaways).
+
 4. Serve. The compose file reproduces the keep config directly:
 
    ```bash
