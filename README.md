@@ -222,5 +222,7 @@ NVIDIA runtime.
 
 ---
 
-*Recorded 2026-09-21. Hardware: 3× RTX PRO 6000 96 GB SM120, PCIe. Numbers
-from `llm-inference-bench` during an exclusive GPU window.*
+*Recorded 2026-09-21. Hardware: 3× RTX PRO 6000 96 GB SM120 on PCIe 4.0
+x16, NODE topology (no NVLink/P2P at the fabric level; P2P forced in
+software for the all-reduce step). Numbers from `llm-inference-bench`
+during an exclusive GPU window.*
