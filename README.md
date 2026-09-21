@@ -37,6 +37,8 @@ Not a full recipe dump. Goal: save others the dead ends.
 | P3 | custom AR + P2P | **4137** | **4393** |
 | **P4** | **Engram → pinned DDR** | **6140** | **5933** |
 
+**Vs dense + ordinal UVA (pete8359 / LIL class, same 3×96 GB ballpark):** retargeted offload reported **~7.4k @ 32k** and still **~4.6k @ 1M**. Our EXL3 peak is **~6.1k @ 8k / ~5.9k @ 16k** and we never held long-ctx prefill. So even the P4 prefill “win” is only vs our AR/P2P/DISK baseline — **not** competitive with that dense path.
+
 ### Decode @ P4 (with DSpark) — `llm-inference-bench` sustained
 
 These look modest vs dense+UVA (~75–85 tok/s/user on similar hardware with DSpark **off**). They are completion tok/s, not a missing 10×.
@@ -68,8 +70,8 @@ Idle pool fits; activation / graphs / speculative / long-prefill workspace does 
 ## Takeaways
 
 1. **EXL3 TP3 on SM120 is real** if you port Tempo/cuda-exl3 (not day-0 TP2 mounts alone).
-2. **Prefill levers that mattered:** custom AR + P2P, then Engram pinned DDR. Batch/seqs alone were small.
-3. **EXL3 wins on prefill knobs @ 32k** (P4); **decode stays ~55 tok/s/user even with DSpark** — useful as a local driver, not competitive with dense+UVA decode. Not a path to 131k–1M with DSpark/graphs still on.
+2. **Within EXL3**, prefill levers that mattered: custom AR + P2P, then Engram pinned DDR. Batch/seqs alone were small. Absolute level still below dense+UVA.
+3. **P4 only recovers EXL3 vs a bad EXL3 baseline** (AR/P2P/DISK). Prefill (~6k @ 8–16k) and decode (~55 tok/s/user with DSpark) both trail dense+ordinal UVA (~7.4k @ 32k prefill, ~75–85 decode). EXL3 here is a bring-up/dead-end record, not the long-ctx or throughput winner.
 4. For long context on this hardware class, **dense + ordinal UVA expert offload** (park **decoder-half** experts, CED boundary ~layer 20 — see LIL / pete8359 writeups) measured far better than pushing EXL3 KV.
 5. Engram is native table weights (not EXL3 experts). Reuse across serve images only for the **same Flash revision**; different HF cuts need a config match check.
 6. On Docker **containerd snapshotter**, `docker save` / naive `ctr images export` may produce empty/broken archives — plan image archival accordingly.
