@@ -58,7 +58,11 @@ dense + ordinal UVA on similar 3×96 GB hardware measured 7,424 prefill
 tok/s at 32k and 4,651 at 1M; the reference is [peterkilfeather's
 decoder-half UVA offload gist](https://gist.github.com/peterkilfeather/7af387df07ff0df2327b8fd7f77596ed),
 a vLLM overlay that parks 8.1 GiB per rank of decoder-half routed experts
-(layers 20 and up) in pinned host RAM, DSpark off. The P4 peak here is
+(layers 20 and up) in pinned host RAM, DSpark off. Gist provenance: PCIe
+Gen5 x16/x16/x8 host, 377 GiB RAM, dense `fb2764a5` checkpoint, LIL r38
+serving image; this box is PCIe 4.0 x16 NODE, so the gist's absolute
+numbers are not expected to transfer 1:1 (prefill reads the offloaded
+experts over PCIe). The P4 peak here is
 ~6.1k at 8k and ~5.9k at 16k, and no long-context prefill completed. P4's
 gain is measured against this stack's own P0 baseline. The dense/UVA
 reference reports higher throughput under a different serving
@@ -158,7 +162,9 @@ Untried, in rough priority order:
 1. Same-box A/B against dense+UVA: run the peterkilfeather overlay on this
    machine during an exclusive window, same bench commit. That turns the
    external reference into a measured comparison and is the main missing
-   number.
+   number. Read the result same-box: the gist was measured on a PCIe Gen5
+   x16/x16/x8 host, and this box is PCIe 4.0 x16 NODE (EPYC Rome platform
+   — Gen4 is a board/CPU cap, not a card limit).
 2. DSpark-off decode rung at P4 — isolates the net wall-clock speedup of
    speculation (accept length was 2.3-2.4 tokens/step; the A/B was not run).
 3. EXL3 long-context recoveries, one knob at a time: speculative decoding
