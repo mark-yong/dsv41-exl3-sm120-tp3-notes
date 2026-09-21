@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "base": "vllm/vllm-openai:deepseekv41-flash-0909",
+  "base_note": "amd64/SM120 port of the Tempo recipe. Tempo upstream pins an ARM64 base digest; this variant keeps the same source archives and overlays and rebuilds natives for 12.0a.",
+  "flashinfer_version": "0.7.0rc1",
+  "arch_list": "12.0a",
+  "tempo_git_rev": "bb386d39098e582fa1446cb96260cdef1df794f9",
+  "archives": {
+    "cutlass-stable": {
+      "repo": "NVIDIA/cutlass",
+      "commit": "cb4247394dd82148787aed73e5dc7cef33cbf862",
+      "url": "https://codeload.github.com/NVIDIA/cutlass/tar.gz/cb4247394dd82148787aed73e5dc7cef33cbf862",
+      "sha256": "7a37329b43a47aaf9ef142be99baff3e71dbeea007b975891350cc0e50bc598b",
+      "bytes": 42506340,
+      "file": "cutlass-stable-cb4247394dd82148787aed73e5dc7cef33cbf862.tar.gz",
+      "strip": 1
+    },
+    "flashinfer": {
+      "repo": "flashinfer-ai/flashinfer",
+      "commit": "07869c61ba581e6d6b8ad8d142f4a6c89b707cc1",
+      "url": "https://codeload.github.com/flashinfer-ai/flashinfer/tar.gz/07869c61ba581e6d6b8ad8d142f4a6c89b707cc1",
+      "sha256": "8f588be5ede62f7ad4da9b0a1291749b8b93b28794420210aed95545ea229e10",
+      "bytes": 22566629,
+      "file": "flashinfer-07869c61ba581e6d6b8ad8d142f4a6c89b707cc1.tar.gz",
+      "strip": 1
+    },
+    "cutlass-fi": {
+      "repo": "NVIDIA/cutlass",
+      "commit": "b46b16d003484063bca4ed365e44095c4c6ed633",
+      "url": "https://codeload.github.com/NVIDIA/cutlass/tar.gz/b46b16d003484063bca4ed365e44095c4c6ed633",
+      "sha256": "eb32d2231412541cdaefedf82827903360b07762a0c8d554ca10a59951b321d0",
+      "bytes": 39386118,
+      "file": "cutlass-fi-b46b16d003484063bca4ed365e44095c4c6ed633.tar.gz",
+      "strip": 1
+    },
+    "cccl": {
+      "repo": "NVIDIA/cccl",
+      "commit": "16bd510c9b712e82b0ab6cbb630d8e29ba1f7116",
+      "url": "https://codeload.github.com/NVIDIA/cccl/tar.gz/16bd510c9b712e82b0ab6cbb630d8e29ba1f7116",
+      "sha256": "8c4a1bebc5dfefaebbd40f21460951c62403f9c1f7c52b151b99cae82a02c844",
+      "bytes": 12368664,
+      "file": "cccl-16bd510c9b712e82b0ab6cbb630d8e29ba1f7116.tar.gz",
+      "strip": 1
+    },
+    "spdlog": {
+      "repo": "gabime/spdlog",
+      "commit": "c3aed4b68373955e1cc94307683d44dca1515d2b",
+      "url": "https://codeload.github.com/gabime/spdlog/tar.gz/c3aed4b68373955e1cc94307683d44dca1515d2b",
+      "sha256": "206184e0d3be5b4ea56343dca519d38d1fdf567b59dd9913e3e959ed4c6b0f4d",
+      "bytes": 269972,
+      "file": "spdlog-c3aed4b68373955e1cc94307683d44dca1515d2b.tar.gz",
+      "strip": 1
+    },
+    "cuda-exl3": {
+      "repo": "Zeuss5/cuda-exl3",
+      "commit": "6a1ffc34866e23f484574ce1922a8bca93eb33b2",
+      "url": "https://codeload.github.com/Zeuss5/cuda-exl3/tar.gz/6a1ffc34866e23f484574ce1922a8bca93eb33b2",
+      "sha256": "5f6d06cdd8f8625ff22e508fa43d125839814043e643e827ad568ffb4a1eb821",
+      "bytes": 163151,
+      "file": "cuda-exl3-6a1ffc34866e23f484574ce1922a8bca93eb33b2.tar.gz",
+      "strip": 1
+    },
+    "vllm": {
+      "repo": "vllm-project/vllm",
+      "commit": "e47aa780bccf59f59dfa2cbb18e17a10b4fe69ba",
+      "url": "https://codeload.github.com/vllm-project/vllm/tar.gz/e47aa780bccf59f59dfa2cbb18e17a10b4fe69ba",
+      "file": "vllm-e47aa780bccf59f59dfa2cbb18e17a10b4fe69ba.tar.gz",
+      "strip": 1,
+      "bytes": 41400289,
+      "sha256": "b92de42e16f73f650856668f698cfdbae96baa8c384ec2ec1b8cb85a022bd94b"
+    }
+  },
+  "cmake": {
+    "file": "cmake-3.31.6-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+    "bytes": 27800904,
+    "sha256": "1c8b05df0602365da91ee6a3336fe57525b137706c4ab5675498f662ae1dbcec",
+    "url": "https://files.pythonhosted.org/packages/59/e8/096984b89133681533650b9078c5ed1c5c9b534e869b5487f22d4de1935c/cmake-3.31.6-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+    "version": "3.31.6"
+  }
+}

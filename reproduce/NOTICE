@@ -1,0 +1,12 @@
+The file reproduce/docker/stage.py is a modified copy of build/stage.py from
+
+  jakejharris/jspark3-deepseek @ bb386d39098e582fa1446cb96260cdef1df794f9
+  https://github.com/jakejharris/jspark3-deepseek
+
+which is licensed under the Apache License, Version 2.0. The modifications
+are documented in the README "Reproducing" section. The image built from
+that tree applies the Tempo patch set from the same source repository; the
+Apache-2.0 license there governs those components.
+
+Everything else under reproduce/ is MIT-licensed, like the rest of this
+repository.

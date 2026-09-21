@@ -5,8 +5,9 @@ DeepSeek-V4.1-Flash on 3× RTX PRO 6000 96 GB (Blackwell SM120) with tensor
 parallelism 3, plus the performance climb that followed. It covers the config
 that measured best, the prefill and decode numbers behind it, and the two
 attempts that failed (FlashInfer autotune, 131k context). Successive configs
-are labeled P0 through P6. The full runbook, compose files, and patch tree
-live in my private homelab docs; this page is the public summary.
+are labeled P0 through P6. The `reproduce/` directory has the image build,
+compose file, and helper scripts to run it; runbooks, ops logs, and secrets
+stay in my private homelab docs.
 
 ## Stack
 
@@ -121,7 +122,86 @@ shorter prefill matrix first, or free more VRAM with smaller graphs.
 - Fidelity checks were smoke tests and the bench tables above; nothing else
   was run.
 - Nothing here claims 300k or 1M context on EXL3.
-- Homelab wiring, compose files, and secrets stay in the private repo.
+
+## Reproducing
+
+The `reproduce/` directory carries the working config and scripts. It
+assumes a 3× RTX PRO 6000 (Blackwell SM120) host with recent NVIDIA driver
+(615.71.09 and CUDA 13.4 user mode in this run) and Docker with the CDI
+NVIDIA runtime.
+
+1. Weights. Pull
+   [`bot-lab-21/DeepSeek-V4.1-Flash-EXL3-3.5bpw-Pollard`](https://huggingface.co/bot-lab-21/DeepSeek-V4.1-Flash-EXL3-3.5bpw-Pollard)
+   (48 shards), then build the TP3 hardlink tree with the virtual-heads
+   config:
+
+   ```bash
+   bash reproduce/tools/prep-tp3-config.sh
+   # SRC defaults to /models/safetensors/DeepSeek-V4.1-Flash-EXL3-3.5bpw-Pollard
+   # writes ./DeepSeek-V4.1-Flash-EXL3-3.5bpw-Pollard-TP3 next to it
+   ```
+
+   The script verifies all 48 shards, hardlinks them into a `-TP3` tree
+   (no extra disk), and rewrites `config.json` to 72 heads / 9 `o_groups`
+   with the original recorded in `virtual_heads_from`.
+
+2. Host P2P override. The P3 step (custom all-reduce + P2P) ran with PCIe
+   P2P forced for the NODE topology:
+
+   ```bash
+   sudo cp reproduce/host/nvidia-p2p-override.conf /etc/modprobe.d/
+   sudo update-initramfs -u && sudo reboot
+   ```
+
+   Verify after reboot with `nvidia-smi topo -m` (showing NODE/PIX paths
+   reachable for P2P) or the engine log's P2P banner.
+
+3. Image. The serving image is Jake Tempo's
+   [jspark3-deepseek](https://github.com/jakejharris/jspark3-deepseek)
+   source tree (rev `bb386d39098e…`) rebuilt on amd64 for SM120. Get it and
+   overlay the variant files:
+
+   ```bash
+   git clone https://github.com/jakejharris/jspark3-deepseek
+   cd jspark3-deepseek && git checkout bb386d39098e582fa1446cb96260cdef1df794f9
+   cp -r <this repo>/reproduce/docker/stage.py build/stage.py
+   cp <this repo>/reproduce/docker/Dockerfile Dockerfile
+   cp <this repo>/reproduce/docker/build.sh build.sh
+   cp <this repo>/reproduce/docker/sources-amd64.json release/sources-amd64.json
+   bash build.sh   # downloads pinned archives, verifies sha256, builds 5 stages
+   ```
+
+   Against upstream, `stage.py` changes `ARCH_LIST` from `12.1a` to
+   `12.0a` (RTX PRO 6000 is SM120; the GB10 Spark is not) and raises
+   `MAX_JOBS` 1 to 16 with 4 NVCC threads. The Dockerfile swaps the ARM64
+   base for `vllm/vllm-openai:deepseekv41-flash-0909` and installs the
+   x86_64 cmake wheel; `sources-amd64.json` carries the same archive pins
+   as upstream with the amd64 cmake wheel. Build takes hours (five source
+   stages, MAX_JOBS 16).
+
+4. Serve. The compose file reproduces the keep config directly:
+
+   ```bash
+   cd <this repo>/reproduce/compose
+   cp .env.example .env    # set VLLM_API_KEY_DSV41 and MODEL_HOST_PATH
+   docker compose up -d    # stop other GPU tenants first; exclusive window
+   curl -s -H "Authorization: Bearer $VLLM_API_KEY_DSV41" \
+     http://localhost:8014/v1/models
+   ```
+
+   Defaults are the P4 values from the tables above (32k context, 4 GiB KV,
+   seqs 4, batched 4096, util 0.75, Engram pinned DDR, custom all-reduce
+   on, P2P on). `docker-compose.yml` header comments map the P0-P3 ladder
+   steps to the flags that differ.
+
+5. Bench. Numbers came from
+   [llm-inference-bench](https://github.com/local-inference-lab/llm-inference-bench)
+   (Martin Vit): 30 s sustained decode per cell, 2048 max output tokens,
+   decode concurrencies 1/2/4 at context 0 and 16k, engine-default
+   sampling. `reproduce/tools/summarize-prefill.py` reduces a bench result
+   JSON to one line per context;
+   `reproduce/tools/capture-vram.sh <dir>` snapshots `nvidia-smi` and free
+   RAM per step.
 
 ## Related reading
 

@@ -1,0 +1,108 @@
+# DeepSeek-V4.1-Flash EXL3 TP3 (Pollard 3.51 bpw) on 3x RTX PRO 6000 (SM120)
+# Image: build it first with reproduce/docker/build.sh (Tempo amd64/SM120 port)
+# This compose is the measured keep config (P4 in the README): Engram pinned
+# DDR, custom all-reduce on, P2P on, CUDA graphs, vision, DSpark speculative.
+# Copy .env.example to .env and set the API key and model path before up.
+#
+# Walking the ladder (README "Prefill"):
+#   P0 eager/disk-Engram/no-AR: add --enforce-eager, set DSV41_ENGRAM_DISK=1,
+#     NCCL_P2P_DISABLE=1, add --disable-custom-all-reduce, seqs 1 / batched 2048
+#   P1-P2: batched 4096, then seqs 4 (keep the AR-off flags)
+#   P3: custom AR on (remove --disable-custom-all-reduce), NCCL_P2P_DISABLE=0,
+#     plus the host P2P override from host/nvidia-p2p-override.conf
+#   P4: DSV41_ENGRAM_DISK=0 (this file's default)
+services:
+  deepseek-v41-flash-exl3:
+    image: ${IMAGE:-dsv41-tempo-sm120-tp3:amd64}
+    container_name: deepseek-v41-flash-exl3
+    pull_policy: never
+    init: true
+    ports:
+      - "8014:8014"
+    shm_size: "128g"
+    ipc: host
+    env_file:
+      - .env
+    environment:
+      HF_HUB_OFFLINE: "1"
+      HF_HOME: /root/.cache/huggingface
+      VLLM_PLUGINS: cuda_exl3
+      TORCH_CUDA_ARCH_LIST: "12.0a"
+      FLASHINFER_CUDA_ARCH_LIST: "12.0a"
+      FLASHINFER_DISABLE_VERSION_CHECK: "1"
+      VLLM_HAS_FLASHINFER_CUBIN: "1"
+      VLLM_ENGINE_READY_TIMEOUT_S: "3600"
+      CUDA_EXL3_MODEL_PATH: /model
+      DSV41_ENGRAM_DISK: "0"
+      DSV41_ENGRAM_DISK_THREADS: "32"
+      # Tempo scheduler block size is 128; retention must be a multiple
+      VLLM_PREFIX_CACHE_RETENTION_INTERVAL: "128"
+      NCCL_P2P_DISABLE: "0"
+      NCCL_P2P_LEVEL: SYS
+      NCCL_CUMEM_ENABLE: "0"
+      NCCL_DEBUG: WARN
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      XDG_CACHE_HOME: /cache
+      TMPDIR: /cache/tmp
+    volumes:
+      - /dev/shm:/dev/shm
+      - ${MODEL_HOST_PATH:?set MODEL_HOST_PATH in .env}:/model:ro
+      - ${HF_CACHE_HOST_PATH:-~/.cache/huggingface}:/root/.cache/huggingface
+      - ${CACHE_HOST_PATH:-~/.cache/vllm-dsv41}:/cache:rw
+    devices:
+      # All three RTX PRO 6000. Pin one line per CDI UUID for strict mapping:
+      # - nvidia.com/gpu=GPU-<uuid>
+      - nvidia.com/gpu=all
+    command:
+      - /model
+      - --tensor-parallel-size
+      - "3"
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8014"
+      - --api-key
+      - ${VLLM_API_KEY_DSV41:?set VLLM_API_KEY_DSV41 in .env}
+      - --max-model-len
+      - ${MAX_MODEL_LEN:-32768}
+      - --kv-cache-dtype
+      - fp8
+      - --kv-cache-memory
+      - ${KV_MEM:-4294967296}
+      - --gpu-memory-utilization
+      - ${UTIL:-0.75}
+      - --max-num-seqs
+      - ${MAX_NUM_SEQS:-4}
+      - --max-num-batched-tokens
+      - ${MAX_BATCHED:-4096}
+      - --block-size
+      - "64"
+      - --quantization
+      - exl3
+      - --tokenizer-mode
+      - deepseek_v41
+      - --tool-call-parser
+      - deepseek_v41
+      - --enable-auto-tool-choice
+      - --reasoning-parser
+      - deepseek_v41
+      - --served-model-name
+      - deepseek-v4.1-flash-exl3
+      - --trust-remote-code
+      - --distributed-executor-backend
+      - mp
+      - --compilation-config
+      - '{"cudagraph_mode":"PIECEWISE"}'
+      - --hf-overrides
+      - '{"vision_max_n_token": 1024, "vision_patch_size": 14, "vision_downsample_ratio": 3}'
+      - --limit-mm-per-prompt
+      - '{"image": 4}'
+      - --speculative-config
+      - '{"method":"dspark","num_speculative_tokens":5,"draft_sample_method":"probabilistic"}'
+      - --kernel-config
+      - '{"enable_flashinfer_autotune":false,"enable_jit_warmup":false,"enable_cutedsl_warmup":false}'
+    restart: "no"
+
+networks: {}
