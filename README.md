@@ -212,11 +212,13 @@ NVIDIA runtime.
    five source stages; at MAX_JOBS 16 it took about an hour on a 60-core
    host (upstream's MAX_JOBS=1 defaults are far slower).
 
-   A prebuilt image from these exact files is on GHCR (built 2026-09-21,
-   public; anonymous pull verified against the registry digest):
+   A prebuilt image from these exact files is on GHCR (rebuilt
+   2026-09-22 so its `jspark3.sources` label matches the current
+   `sources-amd64.json`; public, anonymous pull verified against the
+   registry digest):
 
    ```bash
-   docker pull ghcr.io/mark-yong/dsv41-tempo-sm120-tp3@sha256:075c9cd7d4194e931a10a2be7dbdd7ad499f736e07869ea66b39b85963aea448
+   docker pull ghcr.io/mark-yong/dsv41-tempo-sm120-tp3@sha256:ddd31bc723e22f9081228727f148a1faa4f7c6773af0a2bbf4d040584a0b2622
    # or: docker pull ghcr.io/mark-yong/dsv41-tempo-sm120-tp3:amd64
    ```
 
@@ -228,7 +230,7 @@ Docker Publishing Checklist; this image is documented here only and is
 not announced or supported in the community):
 
 - Status: experimental community derivative; not maintained
-- Image and digest: `ghcr.io/mark-yong/dsv41-tempo-sm120-tp3@sha256:075c9cd7d4194e931a10a2be7dbdd7ad499f736e07869ea66b39b85963aea448`
+- Image and digest: `ghcr.io/mark-yong/dsv41-tempo-sm120-tp3@sha256:ddd31bc723e22f9081228727f148a1faa4f7c6773af0a2bbf4d040584a0b2622`
 - Based on: [jakejharris/jspark3-deepseek](https://github.com/jakejharris/jspark3-deepseek) @ `bb386d39098e…` on `vllm/vllm-openai@sha256:00d577a6a632…`
 - Build recipe: this repo, `reproduce/` (`prepare-tempo-tree.sh`, then `build.sh`)
 - Source commits and patches: `reproduce/tempo-overlay/sources-amd64.json`

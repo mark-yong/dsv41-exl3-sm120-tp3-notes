@@ -1,7 +1,7 @@
 # DeepSeek-V4.1-Flash EXL3 TP3 (Pollard 3.51 bpw) on 3x RTX PRO 6000 (SM120)
 # Image: build it first — see the README "Reproducing" section
 # (reproduce/prepare-tempo-tree.sh + build.sh), or pull the pinned public
-# GHCR image: ghcr.io/mark-yong/dsv41-tempo-sm120-tp3@sha256:075c9cd7…
+# GHCR image: ghcr.io/mark-yong/dsv41-tempo-sm120-tp3@sha256:ddd31bc7…
 # This compose is the measured keep config (P4 in the README): Engram pinned
 # DDR, custom all-reduce on, P2P on, CUDA graphs, vision, DSpark speculative.
 # Copy .env.example to .env and set the API key and model path before up.
