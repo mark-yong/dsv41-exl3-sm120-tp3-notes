@@ -86,18 +86,20 @@ echo "==> Tempo tree integrity receipt"
 TEMPOR_ROOT="$(pwd)"
 git rev-parse HEAD | grep -qx "$(python3 -c "import json;print(json.load(open('release/sources-amd64.json'))['tempo_git_rev'])")" \
   || { echo "FAIL: checkout is not the pinned Tempo revision"; exit 1; }
-# The overlay files this repo replaces upstream are expected to differ from
-# the clone; they must not make the tree look dirty. The build.sh / Dockerfile
-# / stage.py / sources-amd64.json set IS the amd64 port under test.
-OVERLAY_EXCLUDES=( Dockerfile build.sh build/stage.py release/sources-amd64.json )
-for f in "${OVERLAY_EXCLUDES[@]}"; do git update-index --assume-unchanged "$f"; done
+# The overlay file this repo replaces upstream (build/stage.py) is the only
+# tracked file the amd64 port changes; Dockerfile, build.sh, and
+# release/sources-amd64.json are untracked additions in the clone and thus
+# invisible to git diff. The tracked overlay file must not make the tree
+# look dirty - it IS the port under test. Tree integrity is enforced by
+# the tempo-tree.sha256 receipt below.
+git update-index --assume-unchanged build/stage.py
 if ! git diff --quiet; then
-  git update-index --no-assume-unchanged "${OVERLAY_EXCLUDES[@]}"
-  echo "FAIL: working tree is dirty outside the overlay files; refusing to build from a modified checkout"
+  git update-index --no-assume-unchanged build/stage.py
+  echo "FAIL: working tree is dirty outside the overlay; refusing to build from a modified checkout"
   git status --short
   exit 1
 fi
-git update-index --no-assume-unchanged "${OVERLAY_EXCLUDES[@]}"
+git update-index --no-assume-unchanged build/stage.py
 find build tools patches release Dockerfile -type f -exec sha256sum {} + | sed "s|$TEMPOR_ROOT/||" | sort > tempo-tree.sha256
 sha256sum tempo-tree.sha256
 
