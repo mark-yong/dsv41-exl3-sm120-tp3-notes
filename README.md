@@ -44,17 +44,20 @@ The keep config is P4, measured at 32k context with a 4 GiB KV pool:
 | P3 | custom all-reduce + P2P | 4137 | 4393 |
 | P4 | Engram to pinned DDR | 6140 | 5933 |
 
-dense + ordinal UVA on similar 3×96 GB hardware (pete8359, Local Inference
-Lab) reported ~7.4k at 32k and ~4.6k at 1M. The P4 peak here is ~6.1k at 8k
-and ~5.9k at 16k, and no long-context prefill completed. P4's gain is
-measured against this stack's own P0 baseline; the dense path is faster at
-every point that was measured.
+dense + ordinal UVA on similar 3×96 GB hardware measured 7,424 prefill
+tok/s at 32k and 4,651 at 1M; the reference is [peterkilfeather's
+decoder-half UVA offload gist](https://gist.github.com/peterkilfeather/7af387df07ff0df2327b8fd7f77596ed),
+a vLLM overlay that parks 8.1 GiB per rank of decoder-half routed experts
+(layers 20 and up) in pinned host RAM, DSpark off. The P4 peak here is
+~6.1k at 8k and ~5.9k at 16k, and no long-context prefill completed. P4's
+gain is measured against this stack's own P0 baseline; the dense path is
+faster at every point that was measured.
 
 ### Decode (P4, DSpark on, `llm-inference-bench` sustained)
 
-dense + UVA reports ~75-85 tok/s per user on similar hardware with
-speculative decoding off. The table is aggregate completion tok/s; the
-conc-4 column is four users sharing the system.
+peterkilfeather's gist measures decode at 76.3 tok/s per user at 32k up to
+85.5 at 1M with speculative decoding off. The table is aggregate completion
+tok/s; the conc-4 column is four users sharing the system.
 
 | ctx \ conc | 1 | 2 | 4 |
 |-------------|---|---|---|
@@ -101,11 +104,11 @@ shorter prefill matrix first, or free more VRAM with smaller graphs.
    6.1k). Batch size and seq limits moved little.
 3. P4 recovers EXL3 against its own earlier baseline only. Prefill around
    6k at 8-16k and decode around 55 tok/s per user with DSpark on both
-   trail dense + ordinal UVA (~7.4k at 32k, ~75-85 decode).
+   trail the dense path (7,424 prefill at 32k, 76.3-85.5 decode).
 4. For long context on this hardware class, dense weights with ordinal UVA
-   expert offload (decoder-half experts parked, CED boundary around layer
-   20; see the LIL and pete8359 writeups) measured far better than pushing
-   the EXL3 KV pool.
+   expert offload (decoder-half experts parked, CED boundary at layer 20;
+   see peterkilfeather's gist) measured far better than pushing the EXL3
+   KV pool.
 5. Engram holds native table weights rather than EXL3 experts; reuse across
    serve images only works for the same Flash revision, and different HF
    cuts need a config match check.
@@ -122,9 +125,10 @@ shorter prefill matrix first, or free more VRAM with smaller graphs.
 
 ## Related reading
 
+- [peterkilfeather's decoder-half UVA offload gist](https://gist.github.com/peterkilfeather/7af387df07ff0df2327b8fd7f77596ed):
+  the dense-weights path this page compares against; vLLM UVA overlay and
+  compose, measured from 32k through 1M
 - Jake Tempo / Spark TP3 EXL3 lineage (links in the table above)
-- Local Inference Lab dense DS4.1 TP3 + UVA offload campaigns (ordinal
-  retarget vs stock ascending offload)
 
 ---
 
