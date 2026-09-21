@@ -42,10 +42,17 @@ The keep config is P4, serving with a 32,768-token maximum context and a
 | Step | Change | 8k | 16k |
 |------|--------|----|-----|
 | P0 | baseline: Engram on disk, all-reduce off, P2P off, eager | ~2.2k | not measured |
-| P1 | batched 4096, seqs 2, graphs on | 2407 | 2491 |
+| P1 | graphs, vision, DSpark on; batched 2048 to 4096, seqs 1 to 2 | 2407 | 2491 |
 | P2 | seqs 4 | 2353 | 2457 |
 | P3 | custom all-reduce + P2P | 4137 | 4393 |
 | P4 | Engram to pinned DDR | 6140 | 5933 |
+
+Exact control state per rung: P0 was text-only and eager (no CUDA graphs,
+no vision, no DSpark); P1 turned graphs, vision, and DSpark on together
+and changed the scheduler knobs in the same step; P2, P3, and P4 changed
+only the knob listed. So the P0-to-P1 jump bundles graph mode, vision,
+speculation, and scheduler changes, and the P1-to-P4 climbs are
+single-knob. The compose file's header comments carry the same mapping.
 
 dense + ordinal UVA on similar 3×96 GB hardware measured 7,424 prefill
 tok/s at 32k and 4,651 at 1M; the reference is [peterkilfeather's
@@ -160,8 +167,20 @@ NVIDIA runtime.
    `--trust-remote-code`, so this revision pin plus the manifest check is
    the supply-chain gate; do not skip it on an untrusted network path.
 
+   On revision identity: Tempo's third-party notices record this
+   checkpoint's card snapshot as
+   `b60193e0609147553145d1538d935925f2763c1d`. The two revisions' trees
+   are byte-identical except the HF card `README.md` (compared via the HF
+   API on 2026-09-21), so either snapshot yields the same weights and
+   configs. This repo pins `f129e31a…` and that is what was measured; the
+   manifest check is the byte-level gate either way.
+
 2. Host P2P override. The P3 step (custom all-reduce + P2P) ran with PCIe
-   P2P forced for the NODE topology:
+   P2P forced for the NODE topology. **Only do this if your topology
+   matches and you understand what ForceP2P changes** — it forces the
+   driver to expose P2P over paths that may not truly support it, which
+   is exactly what this NODE/PCIe layout needed but other layouts may
+   not:
 
    ```bash
    sudo cp reproduce/host/nvidia-p2p-override.conf /etc/modprobe.d/
@@ -193,20 +212,20 @@ NVIDIA runtime.
    five source stages; at MAX_JOBS 16 it took about an hour on a 60-core
    host (upstream's MAX_JOBS=1 defaults are far slower).
 
-   A prebuilt image from these exact files is on GHCR (built 2026-09-21):
+   A prebuilt image from these exact files is on GHCR (built 2026-09-21,
+   public; anonymous pull verified against the registry digest):
 
-   ```
+   ```bash
    docker pull ghcr.io/mark-yong/dsv41-tempo-sm120-tp3@sha256:075c9cd7d4194e931a10a2be7dbdd7ad499f736e07869ea66b39b85963aea448
+   # or: docker pull ghcr.io/mark-yong/dsv41-tempo-sm120-tp3:amd64
    ```
 
    The source build above remains the reference; the pull is a courtesy
    artifact.
 
-### Community image status
-
-Filled per the Local Inference Lab Community Docker Publishing Checklist;
-this image is documented here only and is not announced or supported in
-the community:
+Community image status (filled per the Local Inference Lab Community
+Docker Publishing Checklist; this image is documented here only and is
+not announced or supported in the community):
 
 - Status: experimental community derivative; not maintained
 - Image and digest: `ghcr.io/mark-yong/dsv41-tempo-sm120-tp3@sha256:075c9cd7d4194e931a10a2be7dbdd7ad499f736e07869ea66b39b85963aea448`
@@ -251,12 +270,17 @@ the community:
 
    Defaults are the P4 values from the tables above (32k context, 4 GiB KV,
    seqs 4, batched 4096, util 0.75, Engram pinned DDR, custom all-reduce
-   on, P2P on). `docker-compose.yml` header comments map the P0-P3 ladder
-   steps to the flags that differ.
+   on, P2P on). The compose file expects an image tagged
+   `dsv41-tempo-sm120-tp3:amd64` (default `IMAGE=`) and does not pull
+   anything; if you use the GHCR image instead, pull it (public, digest
+   above) and either retag it to that name or set `IMAGE=` in `.env` to
+   the digest reference. `docker-compose.yml` header comments map the
+   P0-P3 ladder steps to the flags that differ.
 
 5. Bench. Numbers came from
    [llm-inference-bench](https://github.com/local-inference-lab/llm-inference-bench)
-   (Martin Vit): 30 s sustained decode per cell, 2048 max output tokens,
+   (Martin Vit) at commit `d115feee75095081bda2520aa046986a8885f449`
+   (2026-09-01): 30 s sustained decode per cell, 2048 max output tokens,
    decode concurrencies 1/2/4 at context 0 and 16k, engine-default
    sampling. `reproduce/tools/summarize-prefill.py` reduces a bench result
    JSON to one line per context;

@@ -1,0 +1,22 @@
+JSPARK3 v2 — Tempo
+Copyright 2026 Jake Harris
+
+Serving and preparation work derived from tonyd2wild / Tech2wild and Kai,
+vLLM project contributors and Zeuss5/cuda-exl3 contributors. EXL3 expert
+weights are bot-lab-21's work using WestWaters' Pollard method and
+turboderp's EXL3 format. DeepSeek-AI owns the original model and DSpark work.
+See THIRD_PARTY_NOTICES.md and licenses/ for preserved notices.
+
+---
+
+SM120/amd64 adaptation and experiment documentation:
+Copyright 2026 Mark Yong
+
+This repository derives its build recipe (reproduce/tempo-overlay/) from
+jakejharris/jspark3-deepseek (Tempo) at revision
+bb386d39098e582fa1446cb96260cdef1df794f9. The Tempo NOTICE and
+THIRD_PARTY_NOTICES.md are preserved at this repository's root per
+Apache-2.0 section 4(d). Overlay changes are limited to the amd64/SM120
+port documented in the README "Reproducing" section. The built container
+image carries the components Tempo ships (vLLM Apache-2.0; MIT recipe and
+plugin parts; NVIDIA vllm-openai base image), each under its own notice.

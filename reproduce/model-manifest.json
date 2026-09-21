@@ -2,6 +2,7 @@
   "checkpoint": "bot-lab-21/DeepSeek-V4.1-Flash-EXL3-3.5bpw-Pollard",
   "revision": "f129e31a81e1337aa33e129e2d847fc7e37c8733",
   "generated_utc": "2026-09-21T15:30:00Z",
+  "revision_identity": "Tempo's THIRD_PARTY_NOTICES.md records this checkpoint's card snapshot as b60193e0609147553145d1538d935925f2763c1d. The two HF revisions' trees are byte-identical except the HF card README.md (HF API comparison, 2026-09-21); either snapshot yields the same weights and configs.",
   "note": "sha256 values are HuggingFace LFS blob hashes (they verify the downloaded files byte-for-byte).",
   "files": [
     {

@@ -20,8 +20,19 @@ DST=${DST:-/models/safetensors/DeepSeek-V4.1-Flash-EXL3-3.5bpw-Pollard-TP3}
 [[ ${DST%/} != "/" ]] || { echo "DST must not be /"; exit 2; }
 [[ $DST != "$SRC" && $DST != "$SRC"/* ]] || { echo "DST must differ from SRC and not sit inside it"; exit 2; }
 [[ ! -e $DST || -d $DST ]] || { echo "DST exists and is not a directory: $DST"; exit 2; }
+# rm -rf below needs an explicit opt-in when the destination already exists
+if [[ -e $DST ]]; then
+  [[ ${FORCE:-0} == 1 ]] || { echo "DST exists: $DST — set FORCE=1 to rebuild it"; exit 2; }
+fi
 
 cd "$SRC"
+
+# Optional byte-level verification before linking (slow: hashes ~428 GiB).
+# VERIFY=1 runs the manifest checker (sizes + SHA-256 for every LFS file).
+if [[ ${VERIFY:-0} == 1 ]]; then
+  REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+  python3 "$REPO_DIR/check-model-manifest.py" "$SRC"
+fi
 
 # shard presence via glob array (no ls parsing)
 shards=( model-000??-of-00048.safetensors )

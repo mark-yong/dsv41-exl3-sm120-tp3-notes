@@ -1,17 +1,24 @@
 # DeepSeek-V4.1-Flash EXL3 TP3 (Pollard 3.51 bpw) on 3x RTX PRO 6000 (SM120)
 # Image: build it first — see the README "Reproducing" section
-# (reproduce/prepare-tempo-tree.sh + build.sh, or pull the pinned GHCR image)
+# (reproduce/prepare-tempo-tree.sh + build.sh), or pull the pinned public
+# GHCR image: ghcr.io/mark-yong/dsv41-tempo-sm120-tp3@sha256:075c9cd7…
 # This compose is the measured keep config (P4 in the README): Engram pinned
 # DDR, custom all-reduce on, P2P on, CUDA graphs, vision, DSpark speculative.
 # Copy .env.example to .env and set the API key and model path before up.
 #
-# Walking the ladder (README "Prefill"):
-#   P0 eager/disk-Engram/no-AR: add --enforce-eager, set DSV41_ENGRAM_DISK=1,
-#     NCCL_P2P_DISABLE=1, add --disable-custom-all-reduce, seqs 1 / batched 2048
-#   P1-P2: batched 4096, then seqs 4 (keep the AR-off flags)
+# Walking the ladder (README "Prefill"). P0 was a text-only eager config:
+#   P0: add --enforce-eager, set DSV41_ENGRAM_DISK=1, NCCL_P2P_DISABLE=1,
+#     add --disable-custom-all-reduce, MAX_NUM_SEQS=1, MAX_BATCHED=2048,
+#     and remove the vision + DSpark flags (hf-overrides, limit-mm,
+#     speculative-config) — P0 ran text-only, no graphs, no speculation.
+#   P1: AR-off / Engram-disk state kept, graphs + vision + DSpark ON (the
+#     flags this file already carries), MAX_NUM_SEQS=2, MAX_BATCHED=4096.
+#     So P0->P1 bundles graph mode, vision, and speculation with the
+#     scheduler change; P1 onward is single-knob.
+#   P2: MAX_NUM_SEQS=4.
 #   P3: custom AR on (remove --disable-custom-all-reduce), NCCL_P2P_DISABLE=0,
-#     plus the host P2P override from host/nvidia-p2p-override.conf
-#   P4: DSV41_ENGRAM_DISK=0 (this file's default)
+#     plus the host P2P override from host/nvidia-p2p-override.conf.
+#   P4: DSV41_ENGRAM_DISK=0 (this file's default) — this file as-is.
 services:
   deepseek-v41-flash-exl3:
     image: ${IMAGE:-dsv41-tempo-sm120-tp3:amd64}

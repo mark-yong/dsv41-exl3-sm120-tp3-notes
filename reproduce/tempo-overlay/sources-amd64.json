@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "base": "vllm/vllm-openai:deepseekv41-flash-0909",
+  "base_digest": "sha256:00d577a6a63281e15336029d5bcee4e9a2cf182214a4f20ba6111b1c8e79893d",
   "base_note": "amd64/SM120 port of the Tempo recipe. Tempo upstream pins an ARM64 base digest; this variant keeps the same source archives and overlays and rebuilds natives for 12.0a.",
   "flashinfer_version": "0.7.0rc1",
   "arch_list": "12.0a",

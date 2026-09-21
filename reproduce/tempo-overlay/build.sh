@@ -4,7 +4,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 TAG="${TAG:-dsv41-tempo-sm120-tp3:amd64}"
-WORK="${WORK:-/docker/build/dsv41-tempo-sm120}"
+WORK="${WORK:-$(cd "$(dirname "$0")" && pwd)/.build}"
 INPUTS="${INPUTS:-$WORK/inputs}"
 CTX="$WORK/context"
 
@@ -86,7 +86,18 @@ echo "==> Tempo tree integrity receipt"
 TEMPOR_ROOT="$(pwd)"
 git rev-parse HEAD | grep -qx "$(python3 -c "import json;print(json.load(open('release/sources-amd64.json'))['tempo_git_rev'])")" \
   || { echo "FAIL: checkout is not the pinned Tempo revision"; exit 1; }
-git diff --quiet || { echo "FAIL: working tree is dirty; refusing to build from a modified checkout"; exit 1; }
+# The overlay files this repo replaces upstream are expected to differ from
+# the clone; they must not make the tree look dirty. The build.sh / Dockerfile
+# / stage.py / sources-amd64.json set IS the amd64 port under test.
+OVERLAY_EXCLUDES=( Dockerfile build.sh build/stage.py release/sources-amd64.json )
+for f in "${OVERLAY_EXCLUDES[@]}"; do git update-index --assume-unchanged "$f"; done
+if ! git diff --quiet; then
+  git update-index --no-assume-unchanged "${OVERLAY_EXCLUDES[@]}"
+  echo "FAIL: working tree is dirty outside the overlay files; refusing to build from a modified checkout"
+  git status --short
+  exit 1
+fi
+git update-index --no-assume-unchanged "${OVERLAY_EXCLUDES[@]}"
 find build tools patches release Dockerfile -type f -exec sha256sum {} + | sed "s|$TEMPOR_ROOT/||" | sort > tempo-tree.sha256
 sha256sum tempo-tree.sha256
 
@@ -109,7 +120,8 @@ cat >"$WORK/image.json" <<EOF
   "sources_sha256": "$SOURCES_SHA256",
   "arch_list": "12.0a",
   "path": "tempo-amd64",
-  "base": "vllm/vllm-openai:deepseekv41-flash-0909"
+  "base": "vllm/vllm-openai:deepseekv41-flash-0909",
+  "base_digest": "sha256:00d577a6a63281e15336029d5bcee4e9a2cf182214a4f20ba6111b1c8e79893d"
 }
 EOF
 echo "PASS image $IMAGE_ID"
