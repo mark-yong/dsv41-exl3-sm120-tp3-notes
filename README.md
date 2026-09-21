@@ -179,6 +179,16 @@ NVIDIA runtime.
    as upstream with the amd64 cmake wheel. Build takes hours (five source
    stages, MAX_JOBS 16).
 
+   A prebuilt image from these exact files is on GHCR (built 2026-09-21):
+
+   ```
+   docker pull ghcr.io/mark-yong/dsv41-tempo-sm120-tp3:amd64
+   # digest sha256:075c9cd7d4194e931a10a2be7dbdd7ad499f736e07869ea66b39b85963aea448
+   ```
+
+   The source build above remains the reference; the pull is a courtesy
+   artifact.
+
 4. Serve. The compose file reproduces the keep config directly:
 
    ```bash
