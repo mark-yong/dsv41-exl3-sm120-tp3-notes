@@ -25,7 +25,7 @@ Not a full recipe dump. Goal: save others the dead ends.
 - `NCCL_P2P_DISABLE=0` (P2P enabled) on this SM120 box
 - `max-num-seqs=4`, `max-num-batched-tokens=4096`
 - FlashInfer autotune / JIT / CuteDSL warmup **off**
-- Vision + DSpark enabled (same as climb baseline)
+- Vision + **DSpark on** (`num_speculative_tokens=5`) — same as climb baseline
 
 ### Prefill ladder (tok/s)
 
@@ -37,7 +37,17 @@ Not a full recipe dump. Goal: save others the dead ends.
 | P3 | custom AR + P2P | **4137** | **4393** |
 | **P4** | **Engram → pinned DDR** | **6140** | **5933** |
 
-Decode @ P4 (aggregate tok/s): ~56 @ conc1, ~108 @ conc2, ~201–214 @ conc4 (0 / 16k ctx).
+### Decode @ P4 (with DSpark) — `llm-inference-bench` sustained
+
+These look modest vs dense+UVA (~75–85 tok/s/user on similar hardware with DSpark **off**). They are completion tok/s, not a missing 10×.
+
+| ctx \ conc | 1 | 2 | 4 |
+|-------------|---|---|---|
+| 0 | **55.5** | 108.2 | 200.9 |
+| 16k | **56.0** | 107.5 | 214.2 |
+
+- **Per-request** ≈ 50–56 tok/s (conc4 aggregate is system throughput ≈ 4× that).
+- DSpark **accept length ≈ 2.3–2.4** → MTP-normalized **engine steps/s ≈ 23** @ conc1 (tok/s ÷ accept_len). Speculation helps, but EXL3 TP3 decode here is still far from dense+ordinal-offload.
 
 ## What failed
 
@@ -59,7 +69,7 @@ Idle pool fits; activation / graphs / speculative / long-prefill workspace does 
 
 1. **EXL3 TP3 on SM120 is real** if you port Tempo/cuda-exl3 (not day-0 TP2 mounts alone).
 2. **Prefill levers that mattered:** custom AR + P2P, then Engram pinned DDR. Batch/seqs alone were small.
-3. **EXL3 is a strong ~32k decode/driver profile**, not a free ticket to 131k–1M on 3×96 GB with DSpark/graphs still on.
+3. **EXL3 wins on prefill knobs @ 32k** (P4); **decode stays ~55 tok/s/user even with DSpark** — useful as a local driver, not competitive with dense+UVA decode. Not a path to 131k–1M with DSpark/graphs still on.
 4. For long context on this hardware class, **dense + ordinal UVA expert offload** (park **decoder-half** experts, CED boundary ~layer 20 — see LIL / pete8359 writeups) measured far better than pushing EXL3 KV.
 5. Engram is native table weights (not EXL3 experts). Reuse across serve images only for the **same Flash revision**; different HF cuts need a config match check.
 6. On Docker **containerd snapshotter**, `docker save` / naive `ctr images export` may produce empty/broken archives — plan image archival accordingly.
