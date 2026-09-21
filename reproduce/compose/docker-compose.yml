@@ -1,5 +1,6 @@
 # DeepSeek-V4.1-Flash EXL3 TP3 (Pollard 3.51 bpw) on 3x RTX PRO 6000 (SM120)
-# Image: build it first with reproduce/docker/build.sh (Tempo amd64/SM120 port)
+# Image: build it first — see the README "Reproducing" section
+# (reproduce/prepare-tempo-tree.sh + build.sh, or pull the pinned GHCR image)
 # This compose is the measured keep config (P4 in the README): Engram pinned
 # DDR, custom all-reduce on, P2P on, CUDA graphs, vision, DSpark speculative.
 # Copy .env.example to .env and set the API key and model path before up.
@@ -18,7 +19,7 @@ services:
     pull_policy: never
     init: true
     ports:
-      - "8014:8014"
+      - "${BIND_ADDR:-127.0.0.1}:8014:8014"
     shm_size: "128g"
     ipc: host
     env_file:
@@ -33,7 +34,7 @@ services:
       VLLM_HAS_FLASHINFER_CUBIN: "1"
       VLLM_ENGINE_READY_TIMEOUT_S: "3600"
       CUDA_EXL3_MODEL_PATH: /model
-      DSV41_ENGRAM_DISK: "0"
+      DSV41_ENGRAM_DISK: "${DSV41_ENGRAM_DISK:-0}"
       DSV41_ENGRAM_DISK_THREADS: "32"
       # Tempo scheduler block size is 128; retention must be a multiple
       VLLM_PREFIX_CACHE_RETENTION_INTERVAL: "128"

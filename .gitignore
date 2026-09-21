@@ -1,0 +1,16 @@
+# secrets
+.env
+**/.env
+*.env
+!*.env.example
+
+# build scratch
+*.log
+*.incomplete
+reproduce/tempo-overlay/tempo-tree.sha256
+
+# local results / caches
+results/
+__pycache__/
+*.pyc
+.cache/

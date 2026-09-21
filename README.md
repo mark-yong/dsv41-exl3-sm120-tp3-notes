@@ -24,13 +24,15 @@ auto-build was attempted.
 
 ## What worked
 
-The keep config is P4, measured at 32k context with a 4 GiB KV pool:
+The keep config is P4, serving with a 32,768-token maximum context and a
+4 GiB KV pool; the reported measurements are at 16k context and below:
 
 - Engram tables in pinned host DDR (`DSV41_ENGRAM_DISK=0`); the P0 default
   offloads them to disk
 - Custom all-reduce on
 - `NCCL_P2P_DISABLE=0`, so P2P is enabled on this SM120 box
 - `max-num-seqs=4`, `max-num-batched-tokens=4096`
+- CUDA graphs on (PIECEWISE); only P0 ran eager
 - FlashInfer autotune, JIT, and CuteDSL warmup off
 - Vision and DSpark speculative decoding on (`num_speculative_tokens=5`),
   same as the rest of the climb
@@ -39,8 +41,8 @@ The keep config is P4, measured at 32k context with a 4 GiB KV pool:
 
 | Step | Change | 8k | 16k |
 |------|--------|----|-----|
-| P0 | baseline: Engram on disk, all-reduce off, P2P off | ~2.2k | not measured |
-| P1 | batched 4096, seqs 2 | 2407 | 2491 |
+| P0 | baseline: Engram on disk, all-reduce off, P2P off, eager | ~2.2k | not measured |
+| P1 | batched 4096, seqs 2, graphs on | 2407 | 2491 |
 | P2 | seqs 4 | 2353 | 2457 |
 | P3 | custom all-reduce + P2P | 4137 | 4393 |
 | P4 | Engram to pinned DDR | 6140 | 5933 |
@@ -51,14 +53,16 @@ decoder-half UVA offload gist](https://gist.github.com/peterkilfeather/7af387df0
 a vLLM overlay that parks 8.1 GiB per rank of decoder-half routed experts
 (layers 20 and up) in pinned host RAM, DSpark off. The P4 peak here is
 ~6.1k at 8k and ~5.9k at 16k, and no long-context prefill completed. P4's
-gain is measured against this stack's own P0 baseline; the dense path is
-faster at every point that was measured.
+gain is measured against this stack's own P0 baseline. The dense/UVA
+reference reports higher throughput under a different serving
+configuration; the two were not A/B-tested here.
 
 ### Decode (P4, DSpark on, `llm-inference-bench` sustained)
 
 peterkilfeather's gist measures decode at 76.3 tok/s per user at 32k up to
-85.5 at 1M with speculative decoding off. The table is aggregate completion
-tok/s; the conc-4 column is four users sharing the system.
+85.5 at 1M with speculative decoding off, under a different serving
+configuration; not an A/B against the table. The table is aggregate
+completion tok/s; the conc-4 column is four users sharing the system.
 
 | ctx \ conc | 1 | 2 | 4 |
 |-------------|---|---|---|
@@ -66,9 +70,9 @@ tok/s; the conc-4 column is four users sharing the system.
 | 16k | 56.0 | 107.5 | 214.2 |
 
 - Per-request decode is about 50-56 tok/s.
-- DSpark accept length measured 2.3-2.4, so MTP-normalized engine steps run
-  about 23 per second at conc 1 (completion tok/s divided by accept length).
-  Speculation helps; the level still trails dense + ordinal offload.
+- DSpark accept length measured 2.3-2.4 tokens per step (MTP-normalized
+  engine steps about 23 per second at conc 1). A DSpark-off A/B was not
+  run, so the net wall-clock speedup from speculation was not isolated.
 - The 32k decode cells error in the bench matrix when prompt plus 2048
   output tokens crosses the 32768 `max_model_len`; the server itself stayed
   up.
@@ -77,10 +81,10 @@ tok/s; the conc-4 column is four users sharing the system.
 
 ### P5: FlashInfer autotune
 
-Cold mxfp8 autotune ran about 61 minutes, then the TP2 rank died at the
-autotune `world.barrier()` (Gloo: connection closed by peer). The engine
-never reached `Application startup complete`. I dropped it rather than
-re-running it for the context climb.
+Cold mxfp8 autotune ran about 61 minutes, then tensor-parallel rank 2 died
+at the autotune `world.barrier()` (Gloo: connection closed by peer). The
+engine never reached `Application startup complete`. I dropped it rather
+than re-running it for the context climb.
 
 ### P6: 131k context
 
@@ -132,18 +136,29 @@ NVIDIA runtime.
 
 1. Weights. Pull
    [`bot-lab-21/DeepSeek-V4.1-Flash-EXL3-3.5bpw-Pollard`](https://huggingface.co/bot-lab-21/DeepSeek-V4.1-Flash-EXL3-3.5bpw-Pollard)
-   (48 shards), then build the TP3 hardlink tree with the virtual-heads
-   config:
+   at revision
+   [`f129e31a81e1337aa33e129e2d847fc7e37c8733`](https://huggingface.co/bot-lab-21/DeepSeek-V4.1-Flash-EXL3-3.5bpw-Pollard/tree/f129e31a81e1337aa33e129e2d847fc7e37c8733)
+   (48 shards, 428.5 GiB), verify it, then build the TP3 hardlink tree
+   with the virtual-heads config:
 
    ```bash
-   bash reproduce/tools/prep-tp3-config.sh
-   # SRC defaults to /models/safetensors/DeepSeek-V4.1-Flash-EXL3-3.5bpw-Pollard
-   # writes ./DeepSeek-V4.1-Flash-EXL3-3.5bpw-Pollard-TP3 next to it
+   # name the local dir after the revision; hf CLI equivalent:
+   # hf download bot-lab-21/DeepSeek-V4.1-Flash-EXL3-3.5bpw-Pollard \
+   #   --revision f129e31a81e1337aa33e129e2d847fc7e37c8733 --local-dir <dir>
+   python3 reproduce/check-model-manifest.py <dir>   # sizes + SHA-256 vs manifest
+   bash reproduce/tools/prep-tp3-config.sh           # SRC=<dir>
    ```
 
-   The script verifies all 48 shards, hardlinks them into a `-TP3` tree
-   (no extra disk), and rewrites `config.json` to 72 heads / 9 `o_groups`
-   with the original recorded in `virtual_heads_from`.
+   `reproduce/model-manifest.json` pins every file of the revision
+   (filename, byte size, and LFS SHA-256; 51 hashed files including all
+   48 shards). The checker streams hashes and fails on any mismatch.
+   The prep script re-checks shard presence, hardlinks the files into a
+   `-TP3` tree (no extra disk), and rewrites `config.json` to 72 heads /
+   9 `o_groups` with the original recorded in `virtual_heads_from`.
+
+   The checkpoint ships Python files, and the server runs with
+   `--trust-remote-code`, so this revision pin plus the manifest check is
+   the supply-chain gate; do not skip it on an untrusted network path.
 
 2. Host P2P override. The P3 step (custom all-reduce + P2P) ran with PCIe
    P2P forced for the NODE topology:
@@ -158,32 +173,30 @@ NVIDIA runtime.
 
 3. Image. The serving image is Jake Tempo's
    [jspark3-deepseek](https://github.com/jakejharris/jspark3-deepseek)
-   source tree (rev `bb386d39098e…`) rebuilt on amd64 for SM120. Get it and
-   overlay the variant files:
+   source tree (rev `bb386d39098e…`) rebuilt on amd64 for SM120. One
+   wrapper clones, verifies, and applies the overlay:
 
    ```bash
-   git clone https://github.com/jakejharris/jspark3-deepseek
-   cd jspark3-deepseek && git checkout bb386d39098e582fa1446cb96260cdef1df794f9
-   cp -r <this repo>/reproduce/docker/stage.py build/stage.py
-   cp <this repo>/reproduce/docker/Dockerfile Dockerfile
-   cp <this repo>/reproduce/docker/build.sh build.sh
-   cp <this repo>/reproduce/docker/sources-amd64.json release/sources-amd64.json
-   bash build.sh   # downloads pinned archives, verifies sha256, builds 5 stages
+   bash reproduce/prepare-tempo-tree.sh /path/to/tempo-tree
+   cd /path/to/tempo-tree
+   bash build.sh   # re-verifies revision, clean tree, base digest; then builds
    ```
 
-   Against upstream, `stage.py` changes `ARCH_LIST` from `12.1a` to
-   `12.0a` (RTX PRO 6000 is SM120; the GB10 Spark is not) and raises
-   `MAX_JOBS` 1 to 16 with 4 NVCC threads. The Dockerfile swaps the ARM64
-   base for `vllm/vllm-openai:deepseekv41-flash-0909` and installs the
-   x86_64 cmake wheel; `sources-amd64.json` carries the same archive pins
-   as upstream with the amd64 cmake wheel. Build takes hours (five source
-   stages, MAX_JOBS 16).
+   `reproduce/tempo-overlay/` holds the four files the wrapper copies over
+   upstream: `stage.py` changes `ARCH_LIST` from `12.1a` to `12.0a` (RTX
+   PRO 6000 is SM120; the GB10 Spark is not) and raises `MAX_JOBS` 1 to 16
+   with 4 NVCC threads. The Dockerfile pins the base by digest
+   (`vllm/vllm-openai@sha256:00d577a6…`, what the mutable
+   `deepseekv41-flash-0909` tag pointed at when this was built) and
+   installs the x86_64 cmake wheel; `sources-amd64.json` carries the same
+   archive pins as upstream with the amd64 cmake wheel. The build runs
+   five source stages; at MAX_JOBS 16 it took about an hour on a 60-core
+   host (upstream's MAX_JOBS=1 defaults are far slower).
 
    A prebuilt image from these exact files is on GHCR (built 2026-09-21):
 
    ```
-   docker pull ghcr.io/mark-yong/dsv41-tempo-sm120-tp3:amd64
-   # digest sha256:075c9cd7d4194e931a10a2be7dbdd7ad499f736e07869ea66b39b85963aea448
+   docker pull ghcr.io/mark-yong/dsv41-tempo-sm120-tp3@sha256:075c9cd7d4194e931a10a2be7dbdd7ad499f736e07869ea66b39b85963aea448
    ```
 
    The source build above remains the reference; the pull is a courtesy

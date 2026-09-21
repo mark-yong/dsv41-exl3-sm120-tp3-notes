@@ -80,7 +80,15 @@ SOURCES_SHA256="$(sha256sum "$ROOT/release/sources-amd64.json" | awk '{print $1}
 echo "SOURCES_SHA256=$SOURCES_SHA256"
 
 echo "==> docker pull base"
-docker pull vllm/vllm-openai:deepseekv41-flash-0909
+docker pull "vllm/vllm-openai@sha256:00d577a6a63281e15336029d5bcee4e9a2cf182214a4f20ba6111b1c8e79893d"
+
+echo "==> Tempo tree integrity receipt"
+TEMPOR_ROOT="$(pwd)"
+git rev-parse HEAD | grep -qx "$(python3 -c "import json;print(json.load(open('release/sources-amd64.json'))['tempo_git_rev'])")" \
+  || { echo "FAIL: checkout is not the pinned Tempo revision"; exit 1; }
+git diff --quiet || { echo "FAIL: working tree is dirty; refusing to build from a modified checkout"; exit 1; }
+find build tools patches release Dockerfile -type f -exec sha256sum {} + | sed "s|$TEMPOR_ROOT/||" | sort > tempo-tree.sha256
+sha256sum tempo-tree.sha256
 
 echo "==> docker build (legacy builder; MAX_JOBS=16 inside stages)"
 export DOCKER_BUILDKIT=0

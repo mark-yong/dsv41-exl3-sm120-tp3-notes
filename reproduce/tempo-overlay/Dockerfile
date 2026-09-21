@@ -1,7 +1,7 @@
 # Jake Tempo source tree rebuilt on amd64 / SM120 (RTX PRO 6000).
-# Upstream Tempo Dockerfile pins an ARM64 base + aarch64 cmake wheel + ARCH 12.1a.
+# Upstream Tempo pins an ARM64 base + aarch64 cmake wheel + ARCH 12.1a.
 # This port keeps the same archives/overlays; natives rebuild for 12.0a.
-FROM vllm/vllm-openai:deepseekv41-flash-0909
+FROM vllm/vllm-openai@sha256:00d577a6a63281e15336029d5bcee4e9a2cf182214a4f20ba6111b1c8e79893d
 
 COPY inputs/ /input/
 COPY recipe/build/stage.py recipe/build/run_stage.sh /tempo/build/
