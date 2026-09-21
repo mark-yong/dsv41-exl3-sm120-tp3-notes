@@ -1,92 +1,132 @@
-# DeepSeek-V4.1-Flash EXL3 TP3 on 3× RTX PRO 6000 (SM120) — experiment notes
+# DeepSeek-V4.1-Flash EXL3 TP3 on 3× RTX PRO 6000 (SM120)
 
-Short public record of a Path A′ bring-up and performance climb on **3× RTX PRO 6000 96 GB (Blackwell SM120), TP3**, using the released **Pollard 3.51 bpw EXL3** checkpoint.
+This repo records a bring-up of the Pollard 3.51 bpw EXL3 checkpoint of
+DeepSeek-V4.1-Flash on 3× RTX PRO 6000 96 GB (Blackwell SM120) with tensor
+parallelism 3, plus the performance climb that followed. It covers the config
+that measured best, the prefill and decode numbers behind it, and the two
+attempts that failed (FlashInfer autotune, 131k context). Successive configs
+are labeled P0 through P6. The full runbook, compose files, and patch tree
+live in my private homelab docs; this page is the public summary.
 
-Not a full recipe dump. Goal: save others the dead ends.
-
-## Stack (pins)
+## Stack
 
 | Piece | Choice |
 |-------|--------|
-| Checkpoint | [`bot-lab-21/DeepSeek-V4.1-Flash-EXL3-3.5bpw-Pollard`](https://huggingface.co/bot-lab-21/DeepSeek-V4.1-Flash-EXL3-3.5bpw-Pollard) (+ local TP3 72-head / 9 `o_groups` tree) |
-| Runtime lineage | Jake Tempo / cuda-exl3 TP3 (Spark overlays), rebuilt for **amd64 + `ARCH_LIST=12.0a`** |
-| Upstream TP3 patches | [tonyd2wild/DeepSeek-V4.1-Flash-vLLM-DGX-Spark](https://github.com/tonyd2wild/DeepSeek-V4.1-Flash-vLLM-DGX-Spark) `patch/exl3-tp3/` |
-| Tempo rebuild reference | [jakejharris/jspark3-deepseek](https://github.com/jakejharris/jspark3-deepseek) |
-| Day-0 SM120 EXL3 (TP2) | [diffbot EXL3 2.0bpw recipe](https://huggingface.co/diffbot/DeepSeek-V4.1-Flash-EXL3-2.0bpw-2x-RTX-PRO-6000) — used earlier; **not** the working TP3 path |
+| Checkpoint | [`bot-lab-21/DeepSeek-V4.1-Flash-EXL3-3.5bpw-Pollard`](https://huggingface.co/bot-lab-21/DeepSeek-V4.1-Flash-EXL3-3.5bpw-Pollard) (local TP3 72-head / 9 `o_groups` tree) |
+| Runtime | Jake Tempo's cuda-exl3 TP3 (Spark overlays), rebuilt for amd64 with `ARCH_LIST=12.0a` |
+| Upstream TP3 patches | [tonyd2wild/DeepSeek-V4.1-Flash-vLLM-DGX-Spark](https://github.com/tonyd2wild/DeepSeek-V4.1-Flash-vLLM-DGX-Spark), `patch/exl3-tp3/` |
+| Rebuild reference | [jakejharris/jspark3-deepseek](https://github.com/jakejharris/jspark3-deepseek) |
+| Day-0 TP2 recipe | [diffbot EXL3 2.0bpw](https://huggingface.co/diffbot/DeepSeek-V4.1-Flash-EXL3-2.0bpw-2x-RTX-PRO-6000), used for the first SM120 TP2 attempt; the working TP3 path is the Tempo rebuild |
 
-**Policy we followed:** measure 3.51 bpw first; do **not** auto-build ~3.25 bpw.
+Policy: the 3.51 bpw checkpoint was measured first, and no ~3.25 bpw
+auto-build was attempted.
 
-## What worked (keep config)
+## What worked
 
-**P4 — best measured daily EXL3 profile @ 32k / 4 GiB KV**
+The keep config is P4, measured at 32k context with a 4 GiB KV pool:
 
-- Engram in **pinned host DDR** (not disk)
-- Custom all-reduce **on**
-- `NCCL_P2P_DISABLE=0` (P2P enabled) on this SM120 box
+- Engram tables in pinned host DDR (`DSV41_ENGRAM_DISK=0`); the P0 default
+  offloads them to disk
+- Custom all-reduce on
+- `NCCL_P2P_DISABLE=0`, so P2P is enabled on this SM120 box
 - `max-num-seqs=4`, `max-num-batched-tokens=4096`
-- FlashInfer autotune / JIT / CuteDSL warmup **off**
-- Vision + **DSpark on** (`num_speculative_tokens=5`) — same as climb baseline
+- FlashInfer autotune, JIT, and CuteDSL warmup off
+- Vision and DSpark speculative decoding on (`num_speculative_tokens=5`),
+  same as the rest of the climb
 
-### Prefill ladder (tok/s)
+### Prefill (tok/s)
 
 | Step | Change | 8k | 16k |
 |------|--------|----|-----|
-| P0 | Baseline (Engram disk, AR off, P2P off) | ~2.2k | — |
+| P0 | baseline: Engram on disk, all-reduce off, P2P off | ~2.2k | not measured |
 | P1 | batched 4096, seqs 2 | 2407 | 2491 |
 | P2 | seqs 4 | 2353 | 2457 |
-| P3 | custom AR + P2P | **4137** | **4393** |
-| **P4** | **Engram → pinned DDR** | **6140** | **5933** |
+| P3 | custom all-reduce + P2P | 4137 | 4393 |
+| P4 | Engram to pinned DDR | 6140 | 5933 |
 
-**Vs dense + ordinal UVA (pete8359 / LIL class, same 3×96 GB ballpark):** retargeted offload reported **~7.4k @ 32k** and still **~4.6k @ 1M**. Our EXL3 peak is **~6.1k @ 8k / ~5.9k @ 16k** and we never held long-ctx prefill. So even the P4 prefill “win” is only vs our AR/P2P/DISK baseline — **not** competitive with that dense path.
+dense + ordinal UVA on similar 3×96 GB hardware (pete8359, Local Inference
+Lab) reported ~7.4k at 32k and ~4.6k at 1M. The P4 peak here is ~6.1k at 8k
+and ~5.9k at 16k, and no long-context prefill completed. P4's gain is
+measured against this stack's own P0 baseline; the dense path is faster at
+every point that was measured.
 
-### Decode @ P4 (with DSpark) — `llm-inference-bench` sustained
+### Decode (P4, DSpark on, `llm-inference-bench` sustained)
 
-These look modest vs dense+UVA (~75–85 tok/s/user on similar hardware with DSpark **off**). They are completion tok/s, not a missing 10×.
+dense + UVA reports ~75-85 tok/s per user on similar hardware with
+speculative decoding off. The table is aggregate completion tok/s; the
+conc-4 column is four users sharing the system.
 
 | ctx \ conc | 1 | 2 | 4 |
 |-------------|---|---|---|
-| 0 | **55.5** | 108.2 | 200.9 |
-| 16k | **56.0** | 107.5 | 214.2 |
+| 0 | 55.5 | 108.2 | 200.9 |
+| 16k | 56.0 | 107.5 | 214.2 |
 
-- **Per-request** ≈ 50–56 tok/s (conc4 aggregate is system throughput ≈ 4× that).
-- DSpark **accept length ≈ 2.3–2.4** → MTP-normalized **engine steps/s ≈ 23** @ conc1 (tok/s ÷ accept_len). Speculation helps, but EXL3 TP3 decode here is still far from dense+ordinal-offload.
+- Per-request decode is about 50-56 tok/s.
+- DSpark accept length measured 2.3-2.4, so MTP-normalized engine steps run
+  about 23 per second at conc 1 (completion tok/s divided by accept length).
+  Speculation helps; the level still trails dense + ordinal offload.
+- The 32k decode cells error in the bench matrix when prompt plus 2048
+  output tokens crosses the 32768 `max_model_len`; the server itself stayed
+  up.
 
 ## What failed
 
-### P5 — FlashInfer autotune
+### P5: FlashInfer autotune
 
-Cold mxfp8 autotune ran ~**61 minutes**, then **TP2 died** at the autotune `world.barrier()` (Gloo: connection closed by peer). Never reached `Application startup complete`. Not worth re-running for a context climb.
+Cold mxfp8 autotune ran about 61 minutes, then the TP2 rank died at the
+autotune `world.barrier()` (Gloo: connection closed by peer). The engine
+never reached `Application startup complete`. I dropped it rather than
+re-running it for the context climb.
 
-### P6 — 131k context
+### P6: 131k context
 
 | Attempt | Result |
 |---------|--------|
-| 8 GiB KV / high util | **Boot OOM** (~7.6–7.9 GiB free vs 8 GiB pool) |
-| 7 GiB KV, lean seqs=2 / batched=2048 | **READY** + smoke OK; engine reported ~3.48M token KV budget |
-| Same, long prefill bench | **Mid-bench CUDA OOM** (~474 MiB alloc with ~417–457 MiB free) |
+| 8 GiB KV, util 0.90, then a leaner seqs 2 / batched 2048 retry | Boot OOM both times; ~7.6-7.9 GiB free against the 8 GiB pool |
+| 7 GiB KV, seqs 2, batched 2048 | Engine ready and smoke passed; KV budget reported as 3,479,680 tokens |
+| Same config, long prefill bench | CUDA OOM mid-bench; 474 MiB allocation against 417-457 MiB free |
 
-Idle pool fits; activation / graphs / speculative / long-prefill workspace does not. **No PASS** at 131k under load. P7 (~300k) not attempted.
+The idle pool fits, but activation memory, CUDA graphs, speculative
+decoding, and long-prefill workspace together exceed the remaining margin
+under load. 131k never passed under bench. P7 (~300k) was not attempted.
+Untried recoveries from the notes: turn speculative decoding off, bench a
+shorter prefill matrix first, or free more VRAM with smaller graphs.
 
 ## Takeaways
 
-1. **EXL3 TP3 on SM120 is real** if you port Tempo/cuda-exl3 (not day-0 TP2 mounts alone).
-2. **Within EXL3**, prefill levers that mattered: custom AR + P2P, then Engram pinned DDR. Batch/seqs alone were small. Absolute level still below dense+UVA.
-3. **P4 only recovers EXL3 vs a bad EXL3 baseline** (AR/P2P/DISK). Prefill (~6k @ 8–16k) and decode (~55 tok/s/user with DSpark) both trail dense+ordinal UVA (~7.4k @ 32k prefill, ~75–85 decode). EXL3 here is a bring-up/dead-end record, not the long-ctx or throughput winner.
-4. For long context on this hardware class, **dense + ordinal UVA expert offload** (park **decoder-half** experts, CED boundary ~layer 20 — see LIL / pete8359 writeups) measured far better than pushing EXL3 KV.
-5. Engram is native table weights (not EXL3 experts). Reuse across serve images only for the **same Flash revision**; different HF cuts need a config match check.
-6. On Docker **containerd snapshotter**, `docker save` / naive `ctr images export` may produce empty/broken archives — plan image archival accordingly.
+1. EXL3 TP3 boots on SM120 only after a Tempo/cuda-exl3 port; the day-0
+   TP2 recipe mounts alone were not the working path.
+2. Within EXL3, the prefill levers that measured were custom all-reduce
+   plus P2P (2.2k to 4.1k at 8k) and then Engram in pinned DDR (4.1k to
+   6.1k). Batch size and seq limits moved little.
+3. P4 recovers EXL3 against its own earlier baseline only. Prefill around
+   6k at 8-16k and decode around 55 tok/s per user with DSpark on both
+   trail dense + ordinal UVA (~7.4k at 32k, ~75-85 decode).
+4. For long context on this hardware class, dense weights with ordinal UVA
+   expert offload (decoder-half experts parked, CED boundary around layer
+   20; see the LIL and pete8359 writeups) measured far better than pushing
+   the EXL3 KV pool.
+5. Engram holds native table weights rather than EXL3 experts; reuse across
+   serve images only works for the same Flash revision, and different HF
+   cuts need a config match check.
+6. On Docker's containerd snapshotter, `docker save` and a naive
+   `ctr images export` can produce empty or broken archives. Plan image
+   archival with that in mind.
 
-## Non-goals / not claimed
+## Not claimed
 
-- No fidelity gates beyond smoke + llm-inference-bench tables above
-- No claim of 300k/1M on EXL3
-- Homelab wiring, compose, and secrets stay private
+- Fidelity checks were smoke tests and the bench tables above; nothing else
+  was run.
+- Nothing here claims 300k or 1M context on EXL3.
+- Homelab wiring, compose files, and secrets stay in the private repo.
 
 ## Related reading
 
-- Jake Tempo / Spark TP3 EXL3 lineage (links above)
-- Local Inference Lab dense DS4.1 TP3 + UVA offload campaigns (ordinal retarget vs stock ascending offload)
+- Jake Tempo / Spark TP3 EXL3 lineage (links in the table above)
+- Local Inference Lab dense DS4.1 TP3 + UVA offload campaigns (ordinal
+  retarget vs stock ascending offload)
 
 ---
 
-*Recorded 2026-09-21. Hardware: 3× RTX PRO 6000 96 GB SM120, PCIe. Numbers from `llm-inference-bench` during an exclusive GPU window.*
+*Recorded 2026-09-21. Hardware: 3× RTX PRO 6000 96 GB SM120, PCIe. Numbers
+from `llm-inference-bench` during an exclusive GPU window.*
