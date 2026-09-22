@@ -29,7 +29,7 @@ measurements, and failed attempts behind that result.
 | Max context | 32k (131k boots, OOMs under bench) | 1M window (1M decode cell passed at 1,034,830-token context) |
 | Prefill (8k / 16k / 32k) | 6,140 / 5,933 / skipped | 4,005 / 4,508 / 4,425 |
 | Decode C=1 (0 / 32k / 1M) | 55.5 / skipped / — | 75.8 / 74.8 / 71.7 |
-| Bring-up to READY | ~25 min | ~14-17 min cold; capture 13 s warm |
+| Bring-up to READY | ~25 min | ~14-17 min cold; warm restart not timed (graph capture 13 s with warm cache; the 286 GiB weight load still takes minutes) |
 | Speculation | DSpark on (accept 2.3-2.4 tok/step) | DSpark off (it regressed under offload when Pete tried it) |
 
 On my 3x RTX PRO 6000 Gen4 box, UVA is the better choice for decode and
