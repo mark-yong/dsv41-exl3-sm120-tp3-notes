@@ -27,6 +27,7 @@ measurements, and failed attempts behind that result.
 | Checkpoint | Pollard 3.51 bpw, 48 shards, 428.5 GiB, sha-pinned | official `fb2764a5` |
 | Image | GHCR `dsv41f-tempo-sm120-tp3@sha256:ddd31bc7…` (build recipe in repo) | LIL r38 `localinferencelab/vllm@sha256:f41ca8bb…` |
 | Max context | 32k (131k boots, OOMs under bench) | 1M window (1M decode cell passed at 1,034,830-token context) |
+| KV pool | 4 GiB fp8 at 32k; a 7 GiB (reported as 3,479,680 tokens) attempt booted but OOMed under bench | 2.72M tokens realized on this box (2.60x the 1M ceiling); Pete's Gen5 host: 2.85 GiB ≈ 2.6M tokens |
 | Prefill (8k / 16k / 32k) | 6,140 / 5,933 / skipped | 4,005 / 4,508 / 4,425 |
 | Decode C=1 (0 / 32k / 1M) | 55.5 / skipped / — | 75.8 / 74.8 / 71.7 |
 | Bring-up to READY | ~25 min | ~14–17 min on both timed boots (InstantTensor still ~4.5 min); graph capture only 47 s → 13 s warm; page-cache-hot restart including weight load **not** timed |
