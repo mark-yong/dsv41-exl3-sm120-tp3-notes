@@ -33,7 +33,7 @@ in candidates/exl3/, so the bring-up cost is the build, not the debugging.
 | Serve | `candidates/exl3/reproduce/compose/` | `candidates/uva/compose/` |
 | Port | 8014 | 8015 |
 | Checkpoint | Pollard 3.51 bpw, 48 shards, 428.5 GiB, sha-pinned | dense `fb2764a5` |
-| Image | GHCR `dsv41-tempo-sm120-tp3@sha256:ddd31bc7…` (build recipe in repo) | LIL r38 `localinferencelab/vllm@sha256:f41ca8bb…` |
+| Image | GHCR `dsv41f-tempo-sm120-tp3@sha256:ddd31bc7…` (build recipe in repo) | LIL r38 `localinferencelab/vllm@sha256:f41ca8bb…` |
 | Max context | 32k (131k boots, OOMs under bench) | 1M (1,034,830-token needle PASS) |
 | Prefill (8k / 16k / 32k) | 6,140 / 5,933 / skipped | 4,005 / 4,508 / 4,425 |
 | Decode C=1 (0 / 32k / 1M) | 55.5 / skipped / — | 75.8 / 74.8 / 71.7 |

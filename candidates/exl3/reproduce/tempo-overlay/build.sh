@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-TAG="${TAG:-dsv41-tempo-sm120-tp3:amd64}"
+TAG="${TAG:-dsv41f-tempo-sm120-tp3:amd64}"
 WORK="${WORK:-$(cd "$(dirname "$0")" && pwd)/.build}"
 INPUTS="${INPUTS:-$WORK/inputs}"
 CTX="$WORK/context"

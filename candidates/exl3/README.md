@@ -273,8 +273,8 @@ NVIDIA runtime.
    registry digest):
 
    ```bash
-   docker pull ghcr.io/mark-yong/dsv41-tempo-sm120-tp3@sha256:ddd31bc723e22f9081228727f148a1faa4f7c6773af0a2bbf4d040584a0b2622
-   # or: docker pull ghcr.io/mark-yong/dsv41-tempo-sm120-tp3:amd64
+   docker pull ghcr.io/mark-yong/dsv41f-tempo-sm120-tp3@sha256:ddd31bc723e22f9081228727f148a1faa4f7c6773af0a2bbf4d040584a0b2622
+   # or: docker pull ghcr.io/mark-yong/dsv41f-tempo-sm120-tp3:amd64
    ```
 
    The source build above remains the reference; the pull is a courtesy
@@ -285,7 +285,7 @@ Docker Publishing Checklist; announced via a writeup link in the LIL
 Discord, support still none committed):
 
 - Status: experimental community derivative; not maintained
-- Image and digest: `ghcr.io/mark-yong/dsv41-tempo-sm120-tp3@sha256:ddd31bc723e22f9081228727f148a1faa4f7c6773af0a2bbf4d040584a0b2622`
+- Image and digest: `ghcr.io/mark-yong/dsv41f-tempo-sm120-tp3@sha256:ddd31bc723e22f9081228727f148a1faa4f7c6773af0a2bbf4d040584a0b2622`
 - Based on: [jakejharris/jspark3-deepseek](https://github.com/jakejharris/jspark3-deepseek) @ `bb386d39098e…` on `vllm/vllm-openai@sha256:00d577a6a632…`
 - Build recipe: this repo, `candidates/exl3/reproduce/` (`prepare-tempo-tree.sh`, then `build.sh`)
 - Source commits and patches: `candidates/exl3/reproduce/tempo-overlay/sources-amd64.json`
@@ -329,7 +329,7 @@ Discord, support still none committed):
    Defaults are the P4 values from the tables above (32k context, 4 GiB KV,
    seqs 4, batched 4096, util 0.75, Engram pinned DDR, custom all-reduce
    on, P2P on). The compose file expects an image tagged
-   `dsv41-tempo-sm120-tp3:amd64` (default `IMAGE=`) and does not pull
+   `dsv41f-tempo-sm120-tp3:amd64` (default `IMAGE=`) and does not pull
    anything; if you use the GHCR image instead, pull it (public, digest
    above) and either retag it to that name or set `IMAGE=` in `.env` to
    the digest reference. `docker-compose.yml` header comments map the
