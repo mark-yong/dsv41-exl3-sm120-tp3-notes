@@ -45,6 +45,12 @@ Numbers are from `llm-inference-bench` sustained-decode runs with no other
 GPU workloads running. Community figures (Pete's Gen5 gist) are cited with
 their provenance, never mixed with my own measurements.
 
+One shared bottleneck worth knowing: on this image the B12X PCIe
+all-reduce rejects world size 3, so TP3 falls back to PYNCCL (roughly 40%
+of decode kernel time per Pete's measurement). Upstream issue and the
+acceptance path for a fix:
+[b12x-410-pcie-ar-world3.md](candidates/uva/b12x-410-pcie-ar-world3.md).
+
 ## Test setup
 
 - Hardware: 3x RTX PRO 6000 96 GB (SM120) on PCIe 4.0 x16, NODE topology;

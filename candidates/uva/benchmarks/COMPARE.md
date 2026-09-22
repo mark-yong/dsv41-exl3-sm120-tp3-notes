@@ -86,8 +86,8 @@ standalone prefills (a 1M prefill at ~4.3k tok/s would be minutes; Pete’s
 - **Prefill does not.** ~4.3–4.5k vs Pete 6.8–7.4k at 32k/128k, and below
   EXL3 P4 6.1k@8k. Mix: Gen4 vs Gen5, UVA decoder-expert PCIe reads,
   batched 2048 vs P4’s 4096. PYNCCL at TP3 is **shared** with Pete (B12X
-  PCIe AR rejects world size 3; [b12x#410](https://github.com/local-inference-lab/b12x/issues/410),
-  related [b12x#297](https://github.com/local-inference-lab/b12x/pull/297)).
+  PCIe AR rejects world size 3; analysis and upstream links in
+  [b12x-410-pcie-ar-world3.md](../b12x-410-pcie-ar-world3.md)).
 - **128k and 1M decode work.** That covers the long-context range where the EXL3 candidate has no working result. KV pool
   2.72M tokens (2.60× at 1M).
 - **Bring-up:** UVA READY ~14–17 min vs EXL3 P4 ~25 min on both timed

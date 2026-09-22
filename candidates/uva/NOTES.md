@@ -84,8 +84,11 @@ window, same `llm-inference-bench` family; full tables in
 - A per-expert hot/cold split (two MoE calls per layer) collapses decode
   to 23 tok/s; the fix is a fused two-table kernel (upstream b12x work,
   not attempted here).
-- Decode is wait-bound on the TP all-reduce (~40% of kernel time; PYNCCL
-  ring at world-3; the b12x PCIe AR rejects world size 3, b12x#410).
+- Decode is wait-bound on the TP all-reduce (~40% of kernel time per
+  Pete's measurement; PYNCCL ring at world-3, because the B12X PCIe AR
+  rejects world size 3). Documented with the upstream links and the
+  allowlist analysis in
+  [b12x-410-pcie-ar-world3.md](b12x-410-pcie-ar-world3.md).
 - Pete ran no fidelity gates on this mechanism beyond smoke tests (the
   weights are moved, not modified).
 
