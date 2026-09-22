@@ -81,6 +81,46 @@ acceptance path for a fix:
    first thing I'd try if EXL3 long context is the goal.
 4. Standalone UVA 256k/512k/1M prefill cells (so far decode-only).
 
+## Credits
+
+A warm thanks to the many members of the Local Inference Lab Discord;
+this repo is mostly assembled from their work.
+
+- **Jake Tempo** ([jakejharris/jspark3-deepseek](https://github.com/jakejharris/jspark3-deepseek)):
+  the cuda-exl3 TP3 serving runtime the EXL3 candidate is built on.
+- **tonyd2wild** ([DeepSeek-V4.1-Flash-vLLM-DGX-Spark](https://github.com/tonyd2wild/DeepSeek-V4.1-Flash-vLLM-DGX-Spark)):
+  the upstream TP3 patch set the rebuild applies.
+- **bot-lab-21**: the EXL3 3.51 bpw checkpoint (WestWaters' Pollard method,
+  turboderp's EXL3 format).
+- **[peterkilfeather](https://github.com/peterkilfeather)** (Pete): the
+  decoder-half UVA offload overlay, compose, and the Gen5 measurements
+  ([gist](https://gist.github.com/peterkilfeather/7af387df07ff0df2327b8fd7f77596ed))
+  that candidate B reproduces.
+- **[voipmonitor](https://github.com/voipmonitor)** / voipmonitor (Martin
+  Vit): the docker containers
+  ([blackwell-llm-docker](https://github.com/local-inference-lab/blackwell-llm-docker))
+  and recipes ([rtx6kpro](https://github.com/local-inference-lab/rtx6kpro))
+  most LIL projects run on, the InstantTensor loader and
+  `voipmonitor/vllm` image line behind the UVA route, and the
+  [llm-inference-bench](https://github.com/local-inference-lab/llm-inference-bench)
+  harness every number in this repo comes from.
+- **[lukealonso](https://github.com/lukealonso)** (Luke Alonso): the
+  [b12x](https://github.com/local-inference-lab/b12x) kernel backend (this
+  node's vLLM stacks launch with `BACKEND=b12x`), the PCIe oneshot and
+  even-width all-reduce work, and the quants in
+  [quant-toolkit](https://github.com/local-inference-lab/quant-toolkit).
+- **[ormandj](https://github.com/ormandj)** (David Orman): the
+  [sglang-glm53-flash-sm120](https://github.com/ormandj/sglang-glm53-flash-sm120)
+  image and W4A16+FP8-mix quant behind this box's other TP2 serving stacks.
+- **[NVIDIA Model Optimizer](https://github.com/NVIDIA/Model-Optimizer)**:
+  the NVFP4 quant of Qwen3.6-35B-A3B
+  ([nvidia/Qwen3.6-35B-A3B-NVFP4](https://huggingface.co/nvidia/Qwen3.6-35B-A3B-NVFP4))
+  that serves this node's background traffic.
+- **[DeepSeek](https://github.com/deepseek-ai)**:
+  [DeepSeek-V4.1-Flash](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash),
+  DSpark, CED, and Engram.
+- **vLLM**, **FlashInfer**, **TileLang**, **NVIDIA CUDA / SM120**.
+
 ## Licence and notices
 
 Apache-2.0. Third-party notices preserved at the root ([NOTICE](NOTICE),
