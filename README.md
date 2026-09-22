@@ -109,13 +109,6 @@ this repo is mostly assembled from their work.
   node's vLLM stacks launch with `BACKEND=b12x`), the PCIe oneshot and
   even-width all-reduce work, and the quants in
   [quant-toolkit](https://github.com/local-inference-lab/quant-toolkit).
-- **[ormandj](https://github.com/ormandj)** (David Orman): the
-  [sglang-glm53-flash-sm120](https://github.com/ormandj/sglang-glm53-flash-sm120)
-  image and W4A16+FP8-mix quant behind this box's other TP2 serving stacks.
-- **[NVIDIA Model Optimizer](https://github.com/NVIDIA/Model-Optimizer)**:
-  the NVFP4 quant of Qwen3.6-35B-A3B
-  ([nvidia/Qwen3.6-35B-A3B-NVFP4](https://huggingface.co/nvidia/Qwen3.6-35B-A3B-NVFP4))
-  that serves this node's background traffic.
 - **[DeepSeek](https://github.com/deepseek-ai)**:
   [DeepSeek-V4.1-Flash](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash),
   DSpark, CED, and Engram.
