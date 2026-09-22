@@ -26,15 +26,23 @@ Fair compare is **final-config bring-up**, not the EXL3 P0–P6 climb.
 | CUDA graphs | TileLang/FlashInfer JIT after load (~6 min to routes) | First READY **47 s + 8 s**; live engine (cache hit) **13 s + 8 s** |
 | Start → `Application startup complete` | **~25 min** | First AIO READY **~17 min**; this engine **~14 min** |
 
-Those 14–17 min / 25 min rows are **cold-ish first READY**, not a warm
-restart. Graph/JIT cache already cut UVA capture **47 s → 13 s** between
-the first successful boot and the later recreate. InstantTensor on that
-recreate was still ~**1.1–1.5 GB/s** (NVMe-like), so the 286 GiB read did
-not yet come from DRAM.
+Do **not** read this as “~14–17 min cold; 13 s warm.” The 13 s figure is
+**graph capture only**.
 
-A later restart with Linux page cache hot (this host has ~500 GiB RAM;
-286 GiB weights + ~63 GiB Engram can stay resident) would drop most of
-that **4:33** I/O. That restart was not timed; the live engine stayed up
+| UVA phase | First READY (03:53) | Later recreate (04:32, JIT/graph cache hit) |
+|---|---|---|
+| InstantTensor 286 GiB | **4:27** @ ~1.15 GB/s | **4:33** @ ~1.1–1.5 GB/s |
+| `model_runner` | **679 s** | **693 s** |
+| Graph capture | **47 s + 8 s** | **13 s + 8 s** |
+| Start → READY | **~17 min** | **~14 min** |
+
+Both READY times are still **weight-load dominated**. InstantTensor on the
+04:32 recreate was still NVMe-rate, not DRAM page cache. The only warm win
+logged is capture **47 s → 13 s**.
+
+A restart with Linux page cache hot (this host has ~500 GiB RAM; 286 GiB
+weights + ~63 GiB Engram can stay resident) would drop most of that
+**4:33** I/O. That boot was **not** timed — the live engine stayed up
 through 1M. EXL3 does **not** show the same load-time win across steps:
 P1 `model_runner` was **630 s**, P4 final **1035 s** (Engram pin + DSpark
 on top of JIT cache).
@@ -82,8 +90,10 @@ standalone prefills (a 1M prefill at ~4.3k tok/s would be minutes; Pete’s
   related [b12x#297](https://github.com/local-inference-lab/b12x/pull/297)).
 - **128k and 1M decode work.** That covers the long-context range where the EXL3 candidate has no working result. KV pool
   2.72M tokens (2.60× at 1M).
-- **Bring-up:** first UVA READY ~14–17 min vs EXL3 P4 ~25 min. Warm graph
-  cache already 47 s → 13 s; a page-cache-hot UVA restart was not timed.
+- **Bring-up:** UVA READY ~14–17 min vs EXL3 P4 ~25 min on both timed
+  boots (weight load still ~4.5 min InstantTensor). Graph cache only:
+  47 s → 13 s. A page-cache-hot restart including weight load was **not**
+  timed.
 
 ## Method notes
 
