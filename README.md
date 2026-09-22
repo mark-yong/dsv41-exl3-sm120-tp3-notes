@@ -97,8 +97,7 @@ this repo is mostly assembled from their work.
   decoder-half UVA offload overlay, compose, and the Gen5 measurements
   ([gist](https://gist.github.com/peterkilfeather/7af387df07ff0df2327b8fd7f77596ed))
   that candidate B reproduces.
-- **[voipmonitor](https://github.com/voipmonitor)** / voipmonitor (Martin
-  Vit): the docker containers
+- **[voipmonitor](https://github.com/voipmonitor)**: the docker containers
   ([blackwell-llm-docker](https://github.com/local-inference-lab/blackwell-llm-docker))
   and recipes ([rtx6kpro](https://github.com/local-inference-lab/rtx6kpro))
   most LIL projects run on, the InstantTensor loader and

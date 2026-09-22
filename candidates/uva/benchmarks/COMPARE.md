@@ -121,7 +121,7 @@ are not ours.
   [`rtx6kpro`](https://github.com/local-inference-lab/rtx6kpro),
   [`llm-inference-bench`](https://github.com/local-inference-lab/llm-inference-bench)
   (Martin Vit).
-- **[Voipmonitor](https://github.com/voipmonitor)** / voipmonitor — 
+- **[Voipmonitor](https://github.com/voipmonitor)** — 
   InstantTensor loader, the `voipmonitor/vllm` image line, and the earlier
   [`rtx6kpro`](https://github.com/voipmonitor/rtx6kpro) PCIe/Docker notes.
 - **[Luke Alonso](https://github.com/lukealonso)** — B12X PCIe oneshot,
