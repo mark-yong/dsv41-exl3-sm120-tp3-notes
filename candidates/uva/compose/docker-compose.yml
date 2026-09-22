@@ -1,0 +1,101 @@
+# DeepSeek-V4.1-Flash TP3 dense+UVA candidate (decoder-half expert offload).
+#
+# Provenance: fork of peterkilfeather's compose.yml
+# (gist 7af387df07ff0df2327b8fd7f77596ed, fetched 2026-09-22). Deltas from
+# the gist original, all mechanical:
+#   1. model volume parameterised to ${MODEL_HOST_PATH} (gist pinned
+#      /xscratch/models/DeepSeek-V4.1-Flash-fb2764a5)
+#   2. overlay bind source points into this repo (../overlay/uva.py,
+#      sha256 5295291d...) instead of the gist author's ./patches path
+#   3. host port defaults to 8015 so the EXL3 candidate's 8014 stays free
+#   4. project/container renamed ds41-tp3-uva; cache dir local to this compose
+# Everything else (image digest, entrypoint, command, limits, env defaults)
+# is the gist original verbatim. Recipe and numbers: peterkilfeather's gist;
+# this reproduction is documented in ../NOTES.md.
+#
+# Run (evaluation tenancy: stop other GPU tenants first):
+#   cp .env.example .env   # set MODEL_HOST_PATH (dense fb2764a5 tree)
+#   docker compose up -d
+# Attribution proof (overlay is live):
+#   docker logs ds41-tp3-uva 2>&1 | grep -A2 'ds4-laune overlay'
+#   # ds4-laune overlay: offload walk from ordinal 20,
+#   # (ordinal, bytes) = [(20, '2.24'), (21, '2.24'), (22, '2.24'), (23, '1.41')]
+#   # Total CPU offloaded parameters: 8.13
+name: ds41-tp3-uva
+services:
+  ds41:
+    image: localinferencelab/vllm@sha256:f41ca8bb10bb3a125a50340d70d39ad4b7f5605f3fcb661bc992ed0bc4701a00
+    container_name: ds41-tp3-uva
+    entrypoint: ["/usr/local/bin/serve-ds41-jovian.sh"]
+    # Extra vLLM args, forwarded last by the image wrapper (rung 3b set).
+    command: ["--speculative-config", "None", "--cpu-offload-gb", "8", "--cpu-offload-params", "experts", "--jit-monitor-mode", "warn"]
+    init: true
+    ipc: host
+    shm_size: 32gb
+    restart: "no"
+    stop_grace_period: 120s
+    security_opt: ["seccomp=unconfined"]
+    ulimits:
+      memlock: {soft: -1, hard: -1}
+      stack: 67108864
+      nofile: {soft: 1048576, hard: 1048576}
+    ports:
+      - "${UVA_PORT:-8015}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 3600s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0", "1", "2"]
+              capabilities: [gpu]
+    environment:
+      MODEL_PATH: /model
+      HOST: 0.0.0.0
+      PORT: "8000"
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      CUDA_VISIBLE_DEVICES: "0,1,2"
+      TP_SIZE: "3"
+      DCP_SIZE: "1"
+      MAX_MODEL_LEN: ${MAX_MODEL_LEN:-1048576}
+      MAX_NUM_SEQS: ${MAX_NUM_SEQS:-2}
+      MAX_NUM_BATCHED_TOKENS: ${MAX_NUM_BATCHED_TOKENS:-2048}
+      MAX_CUDAGRAPH_CAPTURE_SIZE: ${MAX_CUDAGRAPH_CAPTURE_SIZE:-24}
+      GPU_MEMORY_UTILIZATION: ${GPU_MEMORY_UTILIZATION:-0.98}
+      ENGRAM_TABLE_MEMORY: ${ENGRAM_TABLE_MEMORY:-ram}
+      ENGRAM_PROJECTION_TP: ${ENGRAM_PROJECTION_TP:-0}
+      ENGRAM_DISK_RESIDENT_SCALES: ${ENGRAM_DISK_RESIDENT_SCALES:-0}
+      ENGRAM_DISK_PREFETCH_MAX_TOKENS: ${ENGRAM_DISK_PREFETCH_MAX_TOKENS:-0}
+      BLOCK_SIZE: ${BLOCK_SIZE:-256}
+      SWA_BLOCK_SIZE: ${SWA_BLOCK_SIZE:-128}
+      OMP_NUM_THREADS: ${OMP_NUM_THREADS:-8}
+      MAX_PARALLEL_PREFILLS: ${MAX_PARALLEL_PREFILLS:-1}
+      PREFILL_COMPUTE_SHARE: ${PREFILL_COMPUTE_SHARE:-0.4}
+      DSPARK_ADAPTIVE_VERIFICATION: ${DSPARK_ADAPTIVE_VERIFICATION:-1}
+      DSPARK_ADAPTIVE_VERIFICATION_COST_SCALE: ${DSPARK_ADAPTIVE_VERIFICATION_COST_SCALE:-1.0}
+      VLLM_LOGGING_LEVEL: ${VLLM_LOGGING_LEVEL:-INFO}
+      VLLM_USE_BREAKABLE_CUDAGRAPH: ${VLLM_USE_BREAKABLE_CUDAGRAPH:-0}
+      VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS: ${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-1}
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      VLLM_NO_USAGE_STATS: "1"
+      DO_NOT_TRACK: "1"
+    volumes:
+      - type: bind
+        source: ${MODEL_HOST_PATH:?set MODEL_HOST_PATH in .env}
+        target: /model
+        read_only: true
+        bind:
+          create_host_path: false
+      - ./cache:/cache
+      # Overlay: offload walk limited to the CED decoder half (lazy ordinal
+      # predicate; source pinned to local-inference-lab/vllm@66c29357).
+      - ../overlay/uva.py:/opt/glm53-flash/vllm/vllm/model_executor/offloader/uva.py:ro
+
+networks: {}

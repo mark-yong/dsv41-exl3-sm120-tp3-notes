@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify a model directory against reproduce/model-manifest.json.
+"""Verify a model directory against model-manifest.json.
 
 Usage: python3 check-model-manifest.py <model-dir> [manifest]
 

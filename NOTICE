@@ -12,11 +12,25 @@ See THIRD_PARTY_NOTICES.md and licenses/ for preserved notices.
 SM120/amd64 adaptation and experiment documentation:
 Copyright 2026 Mark Yong
 
-This repository derives its build recipe (reproduce/tempo-overlay/) from
-jakejharris/jspark3-deepseek (Tempo) at revision
+This repository records two serving candidates for DeepSeek-V4.1-Flash at
+TP3 (candidates/exl3/ and candidates/uva/).
+
+The EXL3 candidate derives its build recipe (candidates/exl3/reproduce/
+tempo-overlay/) from jakejharris/jspark3-deepseek (Tempo) at revision
 bb386d39098e582fa1446cb96260cdef1df794f9. The Tempo NOTICE and
 THIRD_PARTY_NOTICES.md are preserved at this repository's root per
 Apache-2.0 section 4(d). Overlay changes are limited to the amd64/SM120
-port documented in the README "Reproducing" section. The built container
+port documented in candidates/exl3/README.md. The built container
 image carries the components Tempo ships (vLLM Apache-2.0; MIT recipe and
 plugin parts; NVIDIA vllm-openai base image), each under its own notice.
+
+The dense+UVA candidate reproduces the recipe of peterkilfeather's
+decoder-half UVA offload gist
+(https://gist.github.com/peterkilfeather/7af387df07ff0df2327b8fd7f77596ed):
+the overlay file candidates/uva/overlay/uva.py is his work (Apache-2.0,
+pinned by sha256 in candidates/uva/NOTES.md), adapted from
+local-inference-lab/vllm@66c29357; the compose file in candidates/uva/
+compose/ is this repository's adaptation of his compose.yml (deltas
+listed in its header). His measured Gen5 figures are cited with
+provenance; this repository's own numbers come from the same-box run
+recorded in candidates/uva/.

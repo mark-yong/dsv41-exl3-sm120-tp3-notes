@@ -3,12 +3,12 @@ This repository is licensed under the Apache License, Version 2.0
 
 Apache License, Version 2.0 (with notice obligations preserved):
 
-- reproduce/tempo-overlay/stage.py is a modified copy of build/stage.py
+- ../tempo-overlay/stage.py is a modified copy of build/stage.py
   from jakejharris/jspark3-deepseek @ bb386d39098e582fa1446cb96260cdef1df794f9
   (modifications: ARCH_LIST 12.1a -> 12.0a for RTX PRO 6000 / SM120,
   MAX_JOBS 1 -> 16, NVCC threads 1 -> 4; documented in the README
   "Reproducing" section).
-- reproduce/tempo-overlay/Dockerfile and build.sh are rewritten against
+- ../tempo-overlay/Dockerfile and build.sh are rewritten against
   the same upstream source pins (amd64 base image and x86_64 cmake wheel
   in sources-amd64.json, adapted from upstream's release/sources.json).
 - The built image applies the Tempo patch set from the same upstream
@@ -17,11 +17,11 @@ Apache License, Version 2.0 (with notice obligations preserved):
 - The container image also contains the vLLM project and NVIDIA
   Corporation base image (vllm/vllm-openai, Apache-2.0) and components
   built from the FlashInfer, CUTLASS, and cuda-exl3 sources pinned in
-  reproduce/tempo-overlay/sources-amd64.json.
+  ../tempo-overlay/sources-amd64.json.
 
 Original work by Mark Yong, 2026 (Apache-2.0):
 
-- reproduce/tools/prep-tp3-config.sh, reproduce/tools/capture-vram.sh,
-  reproduce/tools/summarize-prefill.py,
-  reproduce/check-model-manifest.py, reproduce/compose/,
-  reproduce/host/, reproduce/model-manifest.json, and all documentation.
+- ../tools/prep-tp3-config.sh, ../tools/capture-vram.sh,
+  ../tools/summarize-prefill.py,
+  ../check-model-manifest.py, ../compose/,
+  ../host/, ../model-manifest.json, and all documentation.

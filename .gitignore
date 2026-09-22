@@ -7,10 +7,13 @@
 # build scratch
 *.log
 *.incomplete
-reproduce/tempo-overlay/tempo-tree.sha256
+tempo-tree.sha256
 
 # local results / caches
 results/
 __pycache__/
 *.pyc
 .cache/
+
+# compose cache dirs
+cache/

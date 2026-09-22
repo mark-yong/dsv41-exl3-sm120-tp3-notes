@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Clone the pinned jspark3-deepseek revision and apply the tempo-overlay
 # files on top. The produced tree is ready for `bash build.sh`.
-# Usage: bash reproduce/prepare-tempo-tree.sh <dest-dir>
+# Usage: bash prepare-tempo-tree.sh <dest-dir>
 set -euo pipefail
 
 REV=bb386d39098e582fa1446cb96260cdef1df794f9
