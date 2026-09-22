@@ -1,14 +1,15 @@
-# DeepSeek-V4.1-Flash EXL3 TP3 on 3× RTX PRO 6000 (SM120)
+# DeepSeek-V4.1-Flash EXL3 TP3 on 3x RTX PRO 6000 (SM120)
 
-This repo records a bring-up of the Pollard 3.51 bpw EXL3 checkpoint of
-DeepSeek-V4.1-Flash on 3× RTX PRO 6000 96 GB (Blackwell SM120) with tensor
-parallelism 3, plus the performance climb that followed. It covers the config
-that measured best, the prefill and decode numbers behind it, and the two
-attempts that failed (FlashInfer autotune, 131k context). Successive configs
-are labeled P0 through P6. The `candidates/exl3/reproduce/` directory has the image build,
-compose file, and helper scripts to run it; runbooks, ops logs, and secrets
-stay in my private homelab docs. A later same-box A/B of the P4 keep
-config against dense decoder-half UVA is in [COMPARE.md](../uva/receipts/COMPARE.md).
+I brought up the Pollard 3.51 bpw EXL3 checkpoint of DeepSeek-V4.1-Flash on
+3x RTX PRO 6000 96 GB (Blackwell SM120) with tensor parallelism 3, then
+chased performance through a series of one-change-at-a-time tests labeled
+P0 through P6. Two attempts failed outright (FlashInfer autotune, 131k
+context); both are documented below with the exact errors. Same-box
+comparison against the official-checkpoint UVA route is in
+[../uva/benchmarks/COMPARE.md](../uva/benchmarks/COMPARE.md).
+
+I tested the existing 3.51 bpw checkpoint as-is and did not build a
+~3.25 bpw variant.
 
 ## Stack
 
@@ -20,18 +21,14 @@ config against dense decoder-half UVA is in [COMPARE.md](../uva/receipts/COMPARE
 | Rebuild reference | [jakejharris/jspark3-deepseek](https://github.com/jakejharris/jspark3-deepseek) |
 | Day-0 TP2 recipe | [diffbot EXL3 2.0bpw](https://huggingface.co/diffbot/DeepSeek-V4.1-Flash-EXL3-2.0bpw-2x-RTX-PRO-6000), used for the first SM120 TP2 attempt; the working TP3 path is the Tempo rebuild |
 
-Policy: the 3.51 bpw checkpoint was measured first, and no ~3.25 bpw
-auto-build was attempted.
+## Results (P4)
 
-## What worked
-
-The keep config is P4, serving with a 32,768-token maximum context and a
-4 GiB KV pool; the reported measurements are at 16k context and below:
+The config I kept: 32,768-token max context, 4 GiB KV pool, measurements at
+16k context and below.
 
 - Engram tables in pinned host DDR (`DSV41_ENGRAM_DISK=0`); the P0 default
-  offloads them to disk
-- Custom all-reduce on
-- `NCCL_P2P_DISABLE=0`, so P2P is enabled on this SM120 box
+  offloaded them to disk
+- Custom all-reduce on; `NCCL_P2P_DISABLE=0`, so P2P is enabled on this box
 - `max-num-seqs=4`, `max-num-batched-tokens=4096`
 - CUDA graphs on (PIECEWISE); only P0 ran eager
 - FlashInfer autotune, JIT, and CuteDSL warmup off
@@ -48,34 +45,32 @@ The keep config is P4, serving with a 32,768-token maximum context and a
 | P3 | custom all-reduce + P2P | 4137 | 4393 |
 | P4 | Engram to pinned DDR | 6140 | 5933 |
 
-Exact control state per rung: P0 was text-only and eager (no CUDA graphs,
-no vision, no DSpark); P1 turned graphs, vision, and DSpark on together
-and changed the scheduler knobs in the same step; P2, P3, and P4 changed
-only the knob listed. So the P0-to-P1 jump bundles graph mode, vision,
-speculation, and scheduler changes, and the P1-to-P4 climbs are
-single-knob. The compose file's header comments carry the same mapping.
+Control state per step: P0 was text-only and eager (no CUDA graphs, no
+vision, no DSpark). P1 turned graphs, vision, and DSpark on together and
+changed the scheduler knobs in the same step; P2 through P4 each changed
+only the knob listed. The compose file's header comments carry the same
+mapping.
 
-dense + ordinal UVA on similar 3×96 GB hardware measured 7,424 prefill
-tok/s at 32k and 4,651 at 1M; the reference is [peterkilfeather's
-decoder-half UVA offload gist](https://gist.github.com/peterkilfeather/7af387df07ff0df2327b8fd7f77596ed),
-a vLLM overlay that parks 8.1 GiB per rank of decoder-half routed experts
-(layers 20 and up) in pinned host RAM, DSpark off. Gist provenance: PCIe
-Gen5 x16/x16/x8 host, 377 GiB RAM, dense `fb2764a5` checkpoint, LIL r38
-serving image; this box is PCIe 4.0 x16 NODE, so the gist's absolute
-numbers are not expected to transfer 1:1 (prefill reads the offloaded
-experts over PCIe). The P4 peak here is
-~6.1k at 8k and ~5.9k at 16k, and no long-context prefill completed. P4's
-gain is measured against this stack's own P0 baseline. Same-box dense UVA
-on this Gen4 box (2026-09-22) prefills ~4.3–4.5k at 16k–128k — below P4
-at 8k/16k and below Pete's Gen5 6.8–7.4k. Tables: [COMPARE.md](../uva/receipts/COMPARE.md).
+The official-checkpoint UVA route measured 7,424 prefill tok/s at 32k and
+4,651 at 1M on [peterkilfeather's Gen5 host](https://gist.github.com/peterkilfeather/7af387df07ff0df2327b8fd7f77596ed)
+(vLLM overlay parking 8.1 GiB/rank of decoder-half routed experts in pinned
+host RAM, DSpark off). His host is PCIe Gen5 x16/x16/x8 with 377 GiB RAM;
+this box is PCIe 4.0 x16 NODE, so his absolute numbers are not expected to
+transfer 1:1 (prefill reads the offloaded experts over PCIe). The P4 peak
+here is ~6.1k at 8k and ~5.9k at 16k, and no long-context prefill completed:
+P4's gain is measured against this stack's own P0 baseline. Same-box UVA on
+this Gen4 box (2026-09-22) prefills ~4.3-4.5k at 16k-128k, below P4 at
+8k/16k and below Pete's Gen5 6.8-7.4k. Tables:
+[../uva/benchmarks/COMPARE.md](../uva/benchmarks/COMPARE.md).
 
 ### Decode (P4, DSpark on, `llm-inference-bench` sustained)
 
-peterkilfeather's gist measures decode at 76.3 tok/s per user at 32k up to
-85.5 at 1M with speculative decoding off. Same-box UVA C=1 decode on this
-Gen4 box was 74–76 at 0–32k and 67–72 out to 1M (DSpark off);
-[COMPARE.md](../uva/receipts/COMPARE.md). The table below is still EXL3 P4 aggregate
-completion tok/s; the conc-4 column is four users sharing the system.
+Pete's gist measures decode at 76.3 tok/s per user at 32k up to 85.5 at 1M
+with speculative decoding off. Same-box UVA on this Gen4 box was 74-76 at
+0-32k and 67-72 out to 1M, also DSpark off;
+[../uva/benchmarks/COMPARE.md](../uva/benchmarks/COMPARE.md). The table
+below is EXL3 P4 aggregate completion tok/s; the conc-4 column is four
+users sharing the system.
 
 | ctx \ conc | 1 | 2 | 4 |
 |-------------|---|---|---|
@@ -84,13 +79,17 @@ completion tok/s; the conc-4 column is four users sharing the system.
 
 - Per-request decode is about 50-56 tok/s.
 - DSpark accept length measured 2.3-2.4 tokens per step (MTP-normalized
-  engine steps about 23 per second at conc 1). A DSpark-off A/B was not
-  run, so the net wall-clock speedup from speculation was not isolated.
+  engine steps about 23 per second at concurrency 1). I did not run a
+  DSpark-off A/B, so the net wall-clock speedup from speculation is
+  unmeasured.
 - The 32k decode cells error in the bench matrix when prompt plus 2048
   output tokens crosses the 32768 `max_model_len`; the server itself stayed
   up.
 
-## What failed
+One validation caveat: what I ran was smoke tests and these bench tables.
+Nothing here measures output quality against the official checkpoint.
+
+## Failed attempts
 
 ### P5: FlashInfer autotune
 
@@ -109,90 +108,38 @@ than re-running it for the context climb.
 
 The idle pool fits, but activation memory, CUDA graphs, speculative
 decoding, and long-prefill workspace together exceed the remaining margin
-under load. 131k never passed under bench. P7 (~300k) was not attempted.
-Untried recoveries from the notes: turn speculative decoding off, bench a
-shorter prefill matrix first, or free more VRAM with smaller graphs.
+under load. The last attempt missed by tens of MiB, so any single change
+under "What I'd test next" might clear it. P7 (~300k) I did not attempt.
 
-## Takeaways
+## What I learned
 
-1. EXL3 TP3 boots on SM120 only after a Tempo/cuda-exl3 port; the day-0
-   TP2 recipe mounts alone were not the working path.
-2. Within EXL3, the prefill levers that measured were custom all-reduce
-   plus P2P (2.2k to 4.1k at 8k) and then Engram in pinned DDR (4.1k to
-   6.1k). Batch size and seq limits moved little.
-3. P4 recovers EXL3 against its own earlier baseline. Same-box, P4 still
-   wins short-context prefill (~6.1k @ 8k vs UVA ~4.5k @ 16k). UVA wins
-   decode (~75 vs ~55 C=1) and is the path that actually serves 128k / 1M.
-   Pete's Gen5 prefill (7,424 @ 32k) does not transfer 1:1 onto this Gen4
-   NODE box. Tables: [COMPARE.md](../uva/receipts/COMPARE.md).
-4. For long context on this hardware class, dense weights with ordinal UVA
-   expert offload (decoder-half experts parked, CED boundary at layer 20)
-   is the working path; EXL3 131k OOMs under bench. Same-box UVA decode
-   held 67–72 tok/s out to 1M.
-5. Engram holds native table weights rather than EXL3 experts; reuse across
-   serve images only works for the same Flash revision, and different HF
-   cuts need a config match check.
+1. On this setup I only got EXL3 TP3 booting after a Tempo/cuda-exl3 port;
+   the day-0 TP2 recipe mounts alone were not the working path.
+2. The prefill levers that measured were custom all-reduce plus P2P (2.2k
+   to 4.1k at 8k) and then Engram in pinned DDR (4.1k to 6.1k). Batch size
+   and seq limits moved little.
+3. EXL3's best result here is ~6.1k prefill at 8k and ~55 tok/s per-user
+   decode, at 32k max context. The UVA route wins decode (~75 vs ~55 C=1)
+   and is the only one of the two I got serving 128k/1M. Pete's Gen5
+   prefill (7,424 at 32k) does not transfer 1:1 onto this Gen4 NODE box.
+4. For long context on this box, official weights with decoder-half UVA
+   expert offload (experts parked from the CED boundary at layer 20) is
+   the working path; EXL3 131k OOMs under bench. Same-box UVA decode held
+   67-72 tok/s out to 1M.
+5. Engram holds native table weights rather than EXL3 experts; reuse
+   across serve images only works for the same Flash revision, and
+   different HF cuts need a config match check.
 6. On Docker's containerd snapshotter, `docker save` and a naive
    `ctr images export` can produce empty or broken archives. Plan image
    archival with that in mind.
 
-## So what
-
-Who this is useful to: anyone bringing DeepSeek-V4.1-Flash onto a 3×96 GB
-Blackwell-class box (RTX PRO 6000, PCIe NODE, no NVLink) and deciding
-between the EXL3 path and the dense+UVA expert-offload path.
-
-- If the goal is long context or per-user decode, dense+UVA is the working
-  path on this box: C=1 decode 74–76 at 0–32k and 67–72 out to 1M, KV
-  pool 2.72M tokens. Short-context prefill still favors EXL3 P4 (~6.1k @
-  8k vs ~4.5k UVA). Pete's Gen5 7.4k@32k / 85@1M remains the faster
-  prefill/long-decode reference. Same-box tables: [COMPARE.md](../uva/receipts/COMPARE.md).
-- If you want EXL3 specifically, the working config and both failure modes
-  are documented, so the bring-up cost is the build, not the debugging.
-  The measured ceiling here is ~6.1k prefill at 8k and ~55 tok/s per-user
-  decode with DSpark on, at 32k max context.
-- What EXL3 buys on this box is not demonstrated by this run: the Engram
-  tables still spill to pinned host DDR and the KV pool stays small. A
-  lower-bpw (~3.25) build to free VRAM was not attempted.
-
-Honest summary: EXL3 TP3 works on SM120 after the Tempo port, and this
-records where it lands — a working but not winning configuration. The
-reusable parts are the single-knob ladder, the failure anatomy, and the
-repro pipeline (manifest-checked checkpoint pin, compose, bench tooling).
-
-## Next steps
-
-Untried, in rough priority order:
-
-1. ~~Same-box A/B against dense+UVA~~ **Done** (2026-09-22):
-   [COMPARE.md](../uva/receipts/COMPARE.md). Remaining on that path: standalone
-   256k/512k/1M prefill (those cells were decode-only); PYNCCL at TP3 is
-   still shared with Pete
-   ([b12x#410](https://github.com/local-inference-lab/b12x/issues/410)).
-2. DSpark-off decode rung at P4 — isolates the net wall-clock speedup of
-   speculation (accept length was 2.3-2.4 tokens/step; the A/B was not run).
-3. EXL3 long-context recoveries, one knob at a time: speculative decoding
-   off, smaller CUDA graphs, a shorter prefill bench matrix. The 131k bench
-   fell short by tens of MiB (474 MiB requested against 417-457 MiB free),
-   so any one of these may clear it.
-4. A ~3.25 bpw auto-build to free VRAM for a larger KV pool — explicitly
-   out of scope so far (see the policy note under Stack); it is the obvious
-   lever if EXL3 long context is the goal.
-5. A real fidelity check: current validation is smoke tests and the bench
-   tables only; nothing measures output quality against dense.
-6. Reproduction reports from other topologies — the P2P override step
-   assumes a NODE/PCIe layout; an NVLink or GB10 box may differ.
-
-## Not claimed
-
-- Fidelity checks were smoke tests and the bench tables above; nothing else
-  was run.
-- Nothing here claims 300k or 1M context on EXL3.
+I would not choose EXL3 over UVA on this hardware unless I specifically
+needed EXL3.
 
 ## Reproducing
 
-The `candidates/exl3/reproduce/` directory carries the working config and scripts. It
-assumes a 3× RTX PRO 6000 (Blackwell SM120) host with recent NVIDIA driver
+The `reproduce/` directory carries the working config and scripts. It
+assumes a 3x RTX PRO 6000 (Blackwell SM120) host with recent NVIDIA driver
 (615.71.09 and CUDA 13.4 user mode in this run) and Docker with the CDI
 NVIDIA runtime.
 
@@ -207,11 +154,11 @@ NVIDIA runtime.
    # name the local dir after the revision; hf CLI equivalent:
    # hf download bot-lab-21/DeepSeek-V4.1-Flash-EXL3-3.5bpw-Pollard \
    #   --revision f129e31a81e1337aa33e129e2d847fc7e37c8733 --local-dir <dir>
-   python3 candidates/exl3/reproduce/check-model-manifest.py <dir>   # sizes + SHA-256 vs manifest
-   bash candidates/exl3/reproduce/tools/prep-tp3-config.sh           # SRC=<dir>
+   python3 reproduce/check-model-manifest.py <dir>   # sizes + SHA-256 vs manifest
+   bash reproduce/tools/prep-tp3-config.sh           # SRC=<dir>
    ```
 
-   `candidates/exl3/reproduce/model-manifest.json` pins every file of the revision
+   `reproduce/model-manifest.json` pins every file of the revision
    (filename, byte size, and LFS SHA-256; 51 hashed files including all
    48 shards). The checker streams hashes and fails on any mismatch.
    The prep script re-checks shard presence, hardlinks the files into a
@@ -232,13 +179,13 @@ NVIDIA runtime.
 
 2. Host P2P override. The P3 step (custom all-reduce + P2P) ran with PCIe
    P2P forced for the NODE topology. **Only do this if your topology
-   matches and you understand what ForceP2P changes** — it forces the
+   matches and you understand what ForceP2P changes**. It forces the
    driver to expose P2P over paths that may not truly support it, which
    is exactly what this NODE/PCIe layout needed but other layouts may
-   not:
+   not.
 
    ```bash
-   sudo cp candidates/exl3/reproduce/host/nvidia-p2p-override.conf /etc/modprobe.d/
+   sudo cp reproduce/host/nvidia-p2p-override.conf /etc/modprobe.d/
    sudo update-initramfs -u && sudo reboot
    ```
 
@@ -251,12 +198,12 @@ NVIDIA runtime.
    wrapper clones, verifies, and applies the overlay:
 
    ```bash
-   bash candidates/exl3/reproduce/prepare-tempo-tree.sh /path/to/tempo-tree
+   bash reproduce/prepare-tempo-tree.sh /path/to/tempo-tree
    cd /path/to/tempo-tree
    bash build.sh   # re-verifies revision, clean tree, base digest; then builds
    ```
 
-   `candidates/exl3/reproduce/tempo-overlay/` holds the four files the wrapper copies over
+   `reproduce/tempo-overlay/` holds the four files the wrapper copies over
    upstream: `stage.py` changes `ARCH_LIST` from `12.1a` to `12.0a` (RTX
    PRO 6000 is SM120; the GB10 Spark is not) and raises `MAX_JOBS` 1 to 16
    with 4 NVCC threads. The Dockerfile pins the base by digest
@@ -269,8 +216,7 @@ NVIDIA runtime.
 
    A prebuilt image from these exact files is on GHCR (rebuilt
    2026-09-22 so its `jspark3.sources` label matches the current
-   `sources-amd64.json`; public, anonymous pull verified against the
-   registry digest):
+   `sources-amd64.json`):
 
    ```bash
    docker pull ghcr.io/mark-yong/dsv41f-tempo-sm120-tp3@sha256:ddd31bc723e22f9081228727f148a1faa4f7c6773af0a2bbf4d040584a0b2622
@@ -287,42 +233,42 @@ Discord, support still none committed):
 - Status: experimental community derivative; not maintained
 - Image and digest: `ghcr.io/mark-yong/dsv41f-tempo-sm120-tp3@sha256:ddd31bc723e22f9081228727f148a1faa4f7c6773af0a2bbf4d040584a0b2622`
 - Based on: [jakejharris/jspark3-deepseek](https://github.com/jakejharris/jspark3-deepseek) @ `bb386d39098e…` on `vllm/vllm-openai@sha256:00d577a6a632…`
-- Build recipe: this repo, `candidates/exl3/reproduce/` (`prepare-tempo-tree.sh`, then `build.sh`)
-- Source commits and patches: `candidates/exl3/reproduce/tempo-overlay/sources-amd64.json`
+- Build recipe: this repo, `reproduce/` (`prepare-tempo-tree.sh`, then `build.sh`)
+- Source commits and patches: `reproduce/tempo-overlay/sources-amd64.json`
   pins all seven source archives (vLLM `e47aa780…`, cuda-exl3 `6a1ffc34…`,
   FlashInfer `07869c61…`, CUTLASS ×2, CCCL, spdlog) and the 15-overlay
   Tempo patch set; the amd64 delta is exactly the four files in
-  `candidates/exl3/reproduce/tempo-overlay/`
+  `reproduce/tempo-overlay/`
 - Changes from base: amd64/SM120 port (`ARCH_LIST` 12.1a→12.0a), parallel
   build (MAX_JOBS 16), x86_64 cmake wheel; no engine-behavior changes
   beyond Tempo's own patch set
-- B12X: N/A — the EXL3 path does not use the B12X kernel backend
+- B12X: N/A; the EXL3 path does not use the B12X kernel backend
 - Tested configuration: 3× RTX PRO 6000 96 GB (SM120) on PCIe 4.0 x16,
   NODE topology; NVIDIA driver 615.71.09, CUDA 13.4 user mode; TP3;
   Pollard 3.51 bpw EXL3 @ `f129e31a…`; fp8 KV (4 GiB); PIECEWISE CUDA
   graphs; DSpark speculative (`num_speculative_tokens=5`); 32,768
-  max-model-len; compose defaults in `candidates/exl3/reproduce/compose/`
+  max-model-len; compose defaults in `reproduce/compose/`
 - Validation results: `llm-inference-bench` decode matrix (conc 1/2/4 ×
   context 0/16k, 30 s sustained, 2048 max output tokens) and the prefill
-  ladder at 8k/16k, during an exclusive GPU window; commands in
+  ladder at 8k/16k, with no other GPU workloads running; commands in
   Reproducing step 5
 - Known limitations: no long-context prefill (131k boots but OOMs under
   bench); same-box UVA decode beats P4 (~75 vs ~55 C=1) and serves 1M,
   but UVA prefill on this Gen4 box does not beat P4 8k/16k (see
-  [COMPARE.md](../uva/receipts/COMPARE.md)); DSpark net speedup not isolated; 8 GiB KV
-  not usable (see "What failed"); fidelity checks were smoke tests and
-  the bench tables only
+  [../uva/benchmarks/COMPARE.md](../uva/benchmarks/COMPARE.md)); DSpark net
+  speedup not isolated; 8 GiB KV not usable (see Failed attempts); output
+  quality not tested against the official checkpoint
 - Support: none committed. Issues on this repository are accepted but may
-  go unanswered; the author runs this path as a documented dead end (see
-  Takeaways).
+  go unanswered; see What I learned for where this route landed on my
+  hardware.
 
-4. Serve. The compose file reproduces the keep config directly:
+4. Serve. The compose file reproduces the final config directly:
 
    ```bash
    cd <this repo>/candidates/exl3/reproduce/compose
    cp .env.example .env    # set VLLM_API_KEY_DSV41 and MODEL_HOST_PATH
    docker compose up -d    # stop other GPU tenants first; exclusive window
-   curl -s -H "Authorization: Bearer $VLLM_API_KEY_DSV41" \
+   curl -s -H "Authorization: Bearer $VLLM_...SV41" \
      http://localhost:8014/v1/models
    ```
 
@@ -340,23 +286,14 @@ Discord, support still none committed):
    (Martin Vit) at commit `d115feee75095081bda2520aa046986a8885f449`
    (2026-09-01): 30 s sustained decode per cell, 2048 max output tokens,
    decode concurrencies 1/2/4 at context 0 and 16k, engine-default
-   sampling. `candidates/exl3/reproduce/tools/summarize-prefill.py` reduces a bench result
+   sampling. `reproduce/tools/summarize-prefill.py` reduces a bench result
    JSON to one line per context;
-   `candidates/exl3/reproduce/tools/capture-vram.sh <dir>` snapshots `nvidia-smi` and free
+   `reproduce/tools/capture-vram.sh <dir>` snapshots `nvidia-smi` and free
    RAM per step.
-
-## Related reading
-
-- [COMPARE.md](../uva/receipts/COMPARE.md): same-box A/B of EXL3 P4 vs dense decoder-half
-  UVA vs Pete's Gen5 gist numbers
-- [peterkilfeather's decoder-half UVA offload gist](https://gist.github.com/peterkilfeather/7af387df07ff0df2327b8fd7f77596ed):
-  the dense-weights recipe; vLLM UVA overlay and compose, measured from
-  32k through 1M on Gen5
-- Jake Tempo / Spark TP3 EXL3 lineage (links in the table above)
 
 ---
 
-*Recorded 2026-09-21; same-box UVA A/B added 2026-09-22. Hardware: 3× RTX
-PRO 6000 96 GB SM120 on PCIe 4.0 x16, NODE topology (no NVLink/P2P at the
-fabric level; P2P forced in software for the all-reduce step). Numbers
-from `llm-inference-bench` during an exclusive GPU window.*
+*Recorded 2026-09-21; same-box UVA comparison added 2026-09-22. Hardware:
+3x RTX PRO 6000 96 GB SM120 on PCIe 4.0 x16, NODE topology (no NVLink/P2P
+at the fabric level; P2P forced in software for the all-reduce step).
+Numbers from `llm-inference-bench` with no other GPU workloads running.*

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Capture nvidia-smi + free into a rung artifact directory.
+# Capture nvidia-smi + free into the results directory for one bench step.
 set -euo pipefail
 OUT=${1:?usage: capture-vram.sh <results-subdir>}
 mkdir -p "$OUT"

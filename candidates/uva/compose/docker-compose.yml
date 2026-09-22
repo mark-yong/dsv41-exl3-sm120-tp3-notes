@@ -1,4 +1,4 @@
-# DeepSeek-V4.1-Flash TP3 dense+UVA candidate (decoder-half expert offload).
+# DeepSeek-V4.1-Flash TP3 candidate: official checkpoint + decoder-half UVA offload.
 #
 # Provenance: fork of peterkilfeather's compose.yml
 # (gist 7af387df07ff0df2327b8fd7f77596ed, fetched 2026-09-22). Deltas from
@@ -13,8 +13,8 @@
 # is the gist original verbatim. Recipe and numbers: peterkilfeather's gist;
 # this reproduction is documented in ../NOTES.md.
 #
-# Run (evaluation tenancy: stop other GPU tenants first):
-#   cp .env.example .env   # set MODEL_HOST_PATH (dense fb2764a5 tree)
+# Run (no other GPU workloads should be active):
+#   cp .env.example .env   # set MODEL_HOST_PATH (official fb2764a5 tree)
 #   docker compose up -d
 # Attribution proof (overlay is live):
 #   docker logs ds41-tp3-uva 2>&1 | grep -A2 'ds4-laune overlay'
@@ -27,7 +27,7 @@ services:
     image: localinferencelab/vllm@sha256:f41ca8bb10bb3a125a50340d70d39ad4b7f5605f3fcb661bc992ed0bc4701a00
     container_name: ds41-tp3-uva
     entrypoint: ["/usr/local/bin/serve-ds41-jovian.sh"]
-    # Extra vLLM args, forwarded last by the image wrapper (rung 3b set).
+    # Extra vLLM args, forwarded last by the image wrapper (Pete's step-3b set).
     command: ["--speculative-config", "None", "--cpu-offload-gb", "8", "--cpu-offload-params", "experts", "--jit-monitor-mode", "warn"]
     init: true
     ipc: host

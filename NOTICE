@@ -24,7 +24,7 @@ port documented in candidates/exl3/README.md. The built container
 image carries the components Tempo ships (vLLM Apache-2.0; MIT recipe and
 plugin parts; NVIDIA vllm-openai base image), each under its own notice.
 
-The dense+UVA candidate reproduces the recipe of peterkilfeather's
+The official-checkpoint UVA candidate reproduces the recipe of peterkilfeather's
 decoder-half UVA offload gist
 (https://gist.github.com/peterkilfeather/7af387df07ff0df2327b8fd7f77596ed):
 the overlay file candidates/uva/overlay/uva.py is his work (Apache-2.0,
