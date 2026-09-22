@@ -7,7 +7,8 @@ that measured best, the prefill and decode numbers behind it, and the two
 attempts that failed (FlashInfer autotune, 131k context). Successive configs
 are labeled P0 through P6. The `reproduce/` directory has the image build,
 compose file, and helper scripts to run it; runbooks, ops logs, and secrets
-stay in my private homelab docs.
+stay in my private homelab docs. A later same-box A/B of the P4 keep
+config against dense decoder-half UVA is in [COMPARE.md](COMPARE.md).
 
 ## Stack
 
@@ -64,15 +65,16 @@ serving image; this box is PCIe 4.0 x16 NODE, so the gist's absolute
 numbers are not expected to transfer 1:1 (prefill reads the offloaded
 experts over PCIe). The P4 peak here is
 ~6.1k at 8k and ~5.9k at 16k, and no long-context prefill completed. P4's
-gain is measured against this stack's own P0 baseline. The dense/UVA
-reference reports higher throughput under a different serving
-configuration; the two were not A/B-tested here.
+gain is measured against this stack's own P0 baseline. Same-box dense UVA
+on this Gen4 box (2026-09-22) prefills ~4.3–4.5k at 16k–128k — below P4
+at 8k/16k and below Pete's Gen5 6.8–7.4k. Tables: [COMPARE.md](COMPARE.md).
 
 ### Decode (P4, DSpark on, `llm-inference-bench` sustained)
 
 peterkilfeather's gist measures decode at 76.3 tok/s per user at 32k up to
-85.5 at 1M with speculative decoding off, under a different serving
-configuration; not an A/B against the table. The table is aggregate
+85.5 at 1M with speculative decoding off. Same-box UVA C=1 decode on this
+Gen4 box was 74–76 at 0–32k and 67–72 out to 1M (DSpark off);
+[COMPARE.md](COMPARE.md). The table below is still EXL3 P4 aggregate
 completion tok/s; the conc-4 column is four users sharing the system.
 
 | ctx \ conc | 1 | 2 | 4 |
@@ -118,13 +120,15 @@ shorter prefill matrix first, or free more VRAM with smaller graphs.
 2. Within EXL3, the prefill levers that measured were custom all-reduce
    plus P2P (2.2k to 4.1k at 8k) and then Engram in pinned DDR (4.1k to
    6.1k). Batch size and seq limits moved little.
-3. P4 recovers EXL3 against its own earlier baseline only. Prefill around
-   6k at 8-16k and decode around 55 tok/s per user with DSpark on both
-   trail the dense path (7,424 prefill at 32k, 76.3-85.5 decode).
+3. P4 recovers EXL3 against its own earlier baseline. Same-box, P4 still
+   wins short-context prefill (~6.1k @ 8k vs UVA ~4.5k @ 16k). UVA wins
+   decode (~75 vs ~55 C=1) and is the path that actually serves 128k / 1M.
+   Pete's Gen5 prefill (7,424 @ 32k) does not transfer 1:1 onto this Gen4
+   NODE box. Tables: [COMPARE.md](COMPARE.md).
 4. For long context on this hardware class, dense weights with ordinal UVA
-   expert offload (decoder-half experts parked, CED boundary at layer 20;
-   see peterkilfeather's gist) measured far better than pushing the EXL3
-   KV pool.
+   expert offload (decoder-half experts parked, CED boundary at layer 20)
+   is the working path; EXL3 131k OOMs under bench. Same-box UVA decode
+   held 67–72 tok/s out to 1M.
 5. Engram holds native table weights rather than EXL3 experts; reuse across
    serve images only works for the same Flash revision, and different HF
    cuts need a config match check.
@@ -138,10 +142,11 @@ Who this is useful to: anyone bringing DeepSeek-V4.1-Flash onto a 3×96 GB
 Blackwell-class box (RTX PRO 6000, PCIe NODE, no NVLink) and deciding
 between the EXL3 path and the dense+UVA expert-offload path.
 
-- If the goal is long context or maximum throughput, the dense+UVA path
-  measured better (7,424 prefill at 32k, 76.3-85.5 decode, per
-  peterkilfeather's gist). Those are external numbers, not an A/B against
-  the tables above, but nothing here contradicts them.
+- If the goal is long context or per-user decode, dense+UVA is the working
+  path on this box: C=1 decode 74–76 at 0–32k and 67–72 out to 1M, KV
+  pool 2.72M tokens. Short-context prefill still favors EXL3 P4 (~6.1k @
+  8k vs ~4.5k UVA). Pete's Gen5 7.4k@32k / 85@1M remains the faster
+  prefill/long-decode reference. Same-box tables: [COMPARE.md](COMPARE.md).
 - If you want EXL3 specifically, the working config and both failure modes
   are documented, so the bring-up cost is the build, not the debugging.
   The measured ceiling here is ~6.1k prefill at 8k and ~55 tok/s per-user
@@ -159,12 +164,11 @@ repro pipeline (manifest-checked checkpoint pin, compose, bench tooling).
 
 Untried, in rough priority order:
 
-1. Same-box A/B against dense+UVA: run the peterkilfeather overlay on this
-   machine during an exclusive window, same bench commit. That turns the
-   external reference into a measured comparison and is the main missing
-   number. Read the result same-box: the gist was measured on a PCIe Gen5
-   x16/x16/x8 host, and this box is PCIe 4.0 x16 NODE (EPYC Rome platform
-   — Gen4 is a board/CPU cap, not a card limit).
+1. ~~Same-box A/B against dense+UVA~~ **Done** (2026-09-22):
+   [COMPARE.md](COMPARE.md). Remaining on that path: standalone
+   256k/512k/1M prefill (those cells were decode-only); PYNCCL at TP3 is
+   still shared with Pete
+   ([b12x#410](https://github.com/local-inference-lab/b12x/issues/410)).
 2. DSpark-off decode rung at P4 — isolates the net wall-clock speedup of
    speculation (accept length was 2.3-2.4 tokens/step; the A/B was not run).
 3. EXL3 long-context recoveries, one knob at a time: speculative decoding
@@ -303,10 +307,11 @@ Discord, support still none committed):
   ladder at 8k/16k, during an exclusive GPU window; commands in
   Reproducing step 5
 - Known limitations: no long-context prefill (131k boots but OOMs under
-  bench); prefill and decode trail the dense+UVA reference (external
-  numbers, not an A/B); DSpark net speedup not isolated; 8 GiB KV not
-  usable (see "What failed"); fidelity checks were smoke tests and the
-  bench tables only
+  bench); same-box UVA decode beats P4 (~75 vs ~55 C=1) and serves 1M,
+  but UVA prefill on this Gen4 box does not beat P4 8k/16k (see
+  [COMPARE.md](COMPARE.md)); DSpark net speedup not isolated; 8 GiB KV
+  not usable (see "What failed"); fidelity checks were smoke tests and
+  the bench tables only
 - Support: none committed. Issues on this repository are accepted but may
   go unanswered; the author runs this path as a documented dead end (see
   Takeaways).
@@ -342,14 +347,16 @@ Discord, support still none committed):
 
 ## Related reading
 
+- [COMPARE.md](COMPARE.md): same-box A/B of EXL3 P4 vs dense decoder-half
+  UVA vs Pete's Gen5 gist numbers
 - [peterkilfeather's decoder-half UVA offload gist](https://gist.github.com/peterkilfeather/7af387df07ff0df2327b8fd7f77596ed):
-  the dense-weights path this page compares against; vLLM UVA overlay and
-  compose, measured from 32k through 1M
+  the dense-weights recipe; vLLM UVA overlay and compose, measured from
+  32k through 1M on Gen5
 - Jake Tempo / Spark TP3 EXL3 lineage (links in the table above)
 
 ---
 
-*Recorded 2026-09-21. Hardware: 3× RTX PRO 6000 96 GB SM120 on PCIe 4.0
-x16, NODE topology (no NVLink/P2P at the fabric level; P2P forced in
-software for the all-reduce step). Numbers from `llm-inference-bench`
-during an exclusive GPU window.*
+*Recorded 2026-09-21; same-box UVA A/B added 2026-09-22. Hardware: 3× RTX
+PRO 6000 96 GB SM120 on PCIe 4.0 x16, NODE topology (no NVLink/P2P at the
+fabric level; P2P forced in software for the all-reduce step). Numbers
+from `llm-inference-bench` during an exclusive GPU window.*
